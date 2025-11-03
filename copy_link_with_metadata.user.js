@@ -50,8 +50,8 @@
         let description = ogDescription ? ogDescription.content :
                           (metaDescription ? metaDescription.content : null);
 
-        // Sanity check: если длина description < 8 символов, считаем его отсутствующим
-        if (description && description.length < 8) {
+        // Sanity check: если длина description < 12 символов, считаем его отсутствующим
+        if (description && description.length < 12) {
             description = null;
         }
 
