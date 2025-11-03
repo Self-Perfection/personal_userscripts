@@ -46,8 +46,15 @@
         // Description
         const ogDescription = document.querySelector('meta[property="og:description"]');
         const metaDescription = document.querySelector('meta[name="description"]');
-        metadata.description = ogDescription ? ogDescription.content :
-                               (metaDescription ? metaDescription.content : null);
+        let description = ogDescription ? ogDescription.content :
+                          (metaDescription ? metaDescription.content : null);
+
+        // Sanity check: если длина description < 8 символов, считаем его отсутствующим
+        if (description && description.length < 8) {
+            description = null;
+        }
+
+        metadata.description = description;
 
         // Site name
         const ogSiteName = document.querySelector('meta[property="og:site_name"]');
