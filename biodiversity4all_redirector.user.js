@@ -8,6 +8,7 @@
 // @icon         https://www.biodiversity4all.org/assets/favicon-2820897efd0b773a52e4e5a889eadc20db75035803eb864ae4a41d4cd7d52ab8.png
 // @grant        none
 // @run-at       document-start
+// @downloadURL  https://raw.githubusercontent.com/Self-Perfection/personal_userscripts/refs/heads/main/biodiversity4all_redirector.user.js
 // ==/UserScript==
 
 (function() {

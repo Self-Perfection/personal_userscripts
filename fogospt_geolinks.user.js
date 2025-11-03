@@ -7,6 +7,7 @@
 // @icon         https://fogos.pt/favicon.ico
 // @match        https://fogos.pt/fogo/*
 // @grant        none
+// @downloadURL  https://raw.githubusercontent.com/Self-Perfection/personal_userscripts/refs/heads/main/fogospt_geolinks.user.js
 // ==/UserScript==
 
 (function() {
