@@ -1,13 +1,14 @@
 // ==UserScript==
 // @name         Copy Page Link with Metadata
 // @namespace    http://tampermonkey.net/
-// @version      1.9
+// @version      2.0
 // @description  Copy current page link with title, thumbnail and metadata
 // @author       You
 // @match        *://*/*
 // @grant        GM_setClipboard
 // @grant        GM_registerMenuCommand
 // @downloadURL  https://raw.githubusercontent.com/Self-Perfection/personal_userscripts/refs/heads/main/copy_link_with_metadata.user.js
+// @changelog    2.0 - Добавлено извлечение автора (article:author, author, twitter:creator); кликабельная ссылка если автор - URL
 // @changelog    1.9 - Расширена поддержка изображений: twitter:image, apple-touch-icon, фильтрация favicon < 32x32, умный выбор лучшего размера
 // @changelog    1.8 - Исправлен баг: невидимый текст на кнопке отмены в диалоге (добавлен color: #333)
 // @changelog    1.7 - Добавлены og:url и og:title; выбор из до 3 URL и 2 title (только если различаются); показ источника для каждого варианта
@@ -181,7 +182,41 @@
         const ogSiteName = document.querySelector('meta[property="og:site_name"]');
         metadata.siteName = ogSiteName ? ogSiteName.content : null;
 
+        // Author - собираем из разных источников, берем первый найденный
+        let author = null;
+
+        // 1. article:author (Open Graph для статей)
+        const articleAuthor = document.querySelector('meta[property="article:author"]');
+        if (articleAuthor && articleAuthor.content) {
+            author = articleAuthor.content;
+        }
+
+        // 2. author (стандартный meta тег)
+        if (!author) {
+            const metaAuthor = document.querySelector('meta[name="author"]');
+            if (metaAuthor && metaAuthor.content) {
+                author = metaAuthor.content;
+            }
+        }
+
+        // 3. twitter:creator (Twitter Cards)
+        if (!author) {
+            const twitterCreator = document.querySelector('meta[name="twitter:creator"], meta[property="twitter:creator"]');
+            if (twitterCreator && twitterCreator.content) {
+                author = twitterCreator.content;
+            }
+        }
+
+        metadata.author = author;
+
         return metadata;
+    }
+
+    // Функция для проверки, является ли строка URL
+    function isUrl(string) {
+        if (!string) return false;
+        // Простая проверка на URL
+        return string.startsWith('http://') || string.startsWith('https://') || string.startsWith('//');
     }
 
     // Функция для экранирования HTML
@@ -202,6 +237,19 @@
 
         // Создаём основную ссылку
         let linkHtml = `<a href="${escapeHtml(url)}">${title}</a>`;
+
+        // Добавляем автора, если есть
+        if (metadata.author) {
+            let authorHtml;
+            if (isUrl(metadata.author)) {
+                // Если автор - это URL, делаем его кликабельной ссылкой
+                authorHtml = `<a href="${escapeHtml(metadata.author)}">${escapeHtml(metadata.author)}</a>`;
+            } else {
+                // Если автор - это текст
+                authorHtml = escapeHtml(metadata.author);
+            }
+            linkHtml += `<br/><small>Автор: ${authorHtml}</small>`;
+        }
 
         // Добавляем description как видимый текст в <small>
         if (metadata.description) {
