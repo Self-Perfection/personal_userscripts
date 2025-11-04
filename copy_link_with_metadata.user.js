@@ -1,13 +1,14 @@
 // ==UserScript==
 // @name         Copy Page Link with Metadata
 // @namespace    http://tampermonkey.net/
-// @version      1.6
+// @version      1.7
 // @description  Copy current page link with title, thumbnail and metadata
 // @author       You
 // @match        *://*/*
 // @grant        GM_setClipboard
 // @grant        GM_registerMenuCommand
 // @downloadURL  https://raw.githubusercontent.com/Self-Perfection/personal_userscripts/refs/heads/main/copy_link_with_metadata.user.js
+// @changelog    1.7 - Добавлены og:url и og:title; выбор из до 3 URL и 2 title (только если различаются); показ источника для каждого варианта
 // @changelog    1.6 - Улучшено: ленивая инициализация стилей (создаются только при первом использовании)
 // @changelog    1.5 - Исправлена утечка памяти: стили toast уведомлений создаются один раз
 // @changelog    1.4 - Добавлена проверка минимальной длины description (< 8 символов)
@@ -56,8 +57,12 @@
     function getPageMetadata() {
         const metadata = {};
 
-        // Title
-        metadata.title = document.title || '';
+        // Title - собираем оба варианта
+        metadata.documentTitle = document.title || '';
+        const ogTitle = document.querySelector('meta[property="og:title"]');
+        metadata.ogTitle = ogTitle ? ogTitle.content : null;
+        // По умолчанию используем document.title
+        metadata.title = metadata.documentTitle;
 
         // Current URL
         metadata.url = window.location.href;
@@ -65,6 +70,10 @@
         // Canonical link
         const canonicalLink = document.querySelector('link[rel="canonical"]');
         metadata.canonicalUrl = canonicalLink ? canonicalLink.href : null;
+
+        // OG URL
+        const ogUrl = document.querySelector('meta[property="og:url"]');
+        metadata.ogUrl = ogUrl ? ogUrl.content : null;
 
         // Thumbnail (og:image или link[rel="image_src"])
         const ogImage = document.querySelector('meta[property="og:image"]');
@@ -168,8 +177,9 @@
         }, 3000);
     }
 
-    // Функция для показа диалога выбора URL
-    function showUrlChoiceDialog(currentUrl, canonicalUrl) {
+    // Универсальная функция для показа диалога выбора
+    // options: [{value: '...', label: '...', source: '...', checked: true/false}, ...]
+    function showChoiceDialog(title, options, fieldName = 'choice') {
         return new Promise((resolve) => {
             // Создаём модальное окно
             const overlay = document.createElement('div');
@@ -196,23 +206,23 @@
                 font-family: Arial, sans-serif;
             `;
 
+            // Генерируем опции
+            const optionsHtml = options.map((opt, idx) => `
+                <label style="display: block; margin-bottom: 12px; cursor: pointer;">
+                    <input type="radio" name="${fieldName}" value="${idx}" ${opt.checked ? 'checked' : ''} style="margin-right: 8px;">
+                    <strong>${escapeHtml(opt.label)}${opt.source ? ` <span style="color: #999; font-weight: normal;">(${escapeHtml(opt.source)})</span>` : ''}</strong><br>
+                    <span style="margin-left: 24px; word-break: break-all; color: #666;">${escapeHtml(opt.value)}</span>
+                </label>
+            `).join('');
+
             dialog.innerHTML = `
-                <h3 style="margin-top: 0;">Выберите URL для копирования</h3>
+                <h3 style="margin-top: 0;">${escapeHtml(title)}</h3>
                 <div style="margin: 16px 0;">
-                    <label style="display: block; margin-bottom: 12px; cursor: pointer;">
-                        <input type="radio" name="urlChoice" value="current" checked style="margin-right: 8px;">
-                        <strong>Текущий URL:</strong><br>
-                        <span style="margin-left: 24px; word-break: break-all; color: #666;">${escapeHtml(currentUrl)}</span>
-                    </label>
-                    <label style="display: block; cursor: pointer;">
-                        <input type="radio" name="urlChoice" value="canonical" style="margin-right: 8px;">
-                        <strong>Канонический URL:</strong><br>
-                        <span style="margin-left: 24px; word-break: break-all; color: #666;">${escapeHtml(canonicalUrl)}</span>
-                    </label>
+                    ${optionsHtml}
                 </div>
                 <div style="text-align: right;">
                     <button id="cancelBtn" style="padding: 8px 16px; margin-right: 8px; border: 1px solid #ddd; background: white; border-radius: 4px; cursor: pointer;">Отмена</button>
-                    <button id="confirmBtn" style="padding: 8px 16px; background: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer;">Копировать</button>
+                    <button id="confirmBtn" style="padding: 8px 16px; background: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer;">Выбрать</button>
                 </div>
             `;
 
@@ -224,9 +234,10 @@
             const cancelBtn = dialog.querySelector('#cancelBtn');
 
             confirmBtn.onclick = () => {
-                const selected = dialog.querySelector('input[name="urlChoice"]:checked').value;
+                const selected = dialog.querySelector(`input[name="${fieldName}"]:checked`);
+                const selectedIdx = parseInt(selected.value);
                 document.body.removeChild(overlay);
-                resolve(selected === 'canonical' ? canonicalUrl : currentUrl);
+                resolve(options[selectedIdx].value);
             };
 
             cancelBtn.onclick = () => {
@@ -251,17 +262,91 @@
         try {
             const metadata = getPageMetadata();
             let selectedUrl = metadata.url;
+            let selectedTitle = metadata.title;
 
-            // Если есть canonical URL - показываем диалог выбора
-            if (metadata.canonicalUrl && metadata.canonicalUrl !== metadata.url) {
-                selectedUrl = await showUrlChoiceDialog(metadata.url, metadata.canonicalUrl);
+            // Собираем уникальные URL для выбора
+            const urlOptions = [];
+            const seenUrls = new Set();
 
-                // Если пользователь отменил
+            // Текущий URL (всегда первый)
+            urlOptions.push({
+                value: metadata.url,
+                label: 'Текущий URL',
+                source: 'window.location.href',
+                checked: true
+            });
+            seenUrls.add(metadata.url);
+
+            // Canonical URL
+            if (metadata.canonicalUrl && !seenUrls.has(metadata.canonicalUrl)) {
+                urlOptions.push({
+                    value: metadata.canonicalUrl,
+                    label: 'Канонический URL',
+                    source: 'link[rel="canonical"]',
+                    checked: false
+                });
+                seenUrls.add(metadata.canonicalUrl);
+            }
+
+            // OG URL
+            if (metadata.ogUrl && !seenUrls.has(metadata.ogUrl)) {
+                urlOptions.push({
+                    value: metadata.ogUrl,
+                    label: 'Open Graph URL',
+                    source: 'og:url',
+                    checked: false
+                });
+                seenUrls.add(metadata.ogUrl);
+            }
+
+            // Показываем диалог выбора URL только если есть варианты
+            if (urlOptions.length > 1) {
+                selectedUrl = await showChoiceDialog('Выберите URL для копирования', urlOptions, 'urlChoice');
+
                 if (!selectedUrl) {
                     showToast('Копирование отменено', 'error');
                     return;
                 }
             }
+
+            // Собираем варианты title для выбора
+            const titleOptions = [];
+            const seenTitles = new Set();
+
+            // document.title (всегда первый)
+            if (metadata.documentTitle) {
+                titleOptions.push({
+                    value: metadata.documentTitle,
+                    label: 'Заголовок страницы',
+                    source: 'document.title',
+                    checked: true
+                });
+                seenTitles.add(metadata.documentTitle);
+            }
+
+            // og:title
+            if (metadata.ogTitle && !seenTitles.has(metadata.ogTitle)) {
+                titleOptions.push({
+                    value: metadata.ogTitle,
+                    label: 'Open Graph заголовок',
+                    source: 'og:title',
+                    checked: false
+                });
+                seenTitles.add(metadata.ogTitle);
+            }
+
+            // Показываем диалог выбора title только если есть варианты
+            if (titleOptions.length > 1) {
+                selectedTitle = await showChoiceDialog('Выберите заголовок', titleOptions, 'titleChoice');
+
+                if (!selectedTitle) {
+                    showToast('Копирование отменено', 'error');
+                    return;
+                }
+            }
+
+            // Обновляем metadata с выбранным title
+            metadata.title = selectedTitle;
 
             // Генерируем HTML-ссылку
             const linkHtml = generateLink(selectedUrl, metadata);
