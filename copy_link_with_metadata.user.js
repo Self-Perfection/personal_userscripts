@@ -1,13 +1,14 @@
 // ==UserScript==
 // @name         Copy Page Link with Metadata
 // @namespace    http://tampermonkey.net/
-// @version      1.5
+// @version      1.6
 // @description  Copy current page link with title, thumbnail and metadata
 // @author       You
 // @match        *://*/*
 // @grant        GM_setClipboard
 // @grant        GM_registerMenuCommand
 // @downloadURL  https://raw.githubusercontent.com/Self-Perfection/personal_userscripts/refs/heads/main/copy_link_with_metadata.user.js
+// @changelog    1.6 - Улучшено: ленивая инициализация стилей (создаются только при первом использовании)
 // @changelog    1.5 - Исправлена утечка памяти: стили toast уведомлений создаются один раз
 // @changelog    1.4 - Добавлена проверка минимальной длины description (< 8 символов)
 // ==/UserScript==
@@ -15,31 +16,41 @@
 (function() {
     'use strict';
 
-    // Добавляем стили для toast уведомлений один раз при инициализации
-    const toastStyles = document.createElement('style');
-    toastStyles.textContent = `
-        @keyframes slideIn {
-            from {
-                transform: translateX(400px);
-                opacity: 0;
-            }
-            to {
-                transform: translateX(0);
-                opacity: 1;
-            }
+    // Флаг для отслеживания, были ли добавлены стили
+    let toastStylesInitialized = false;
+
+    // Функция для ленивой инициализации стилей toast уведомлений
+    function initToastStyles() {
+        if (toastStylesInitialized) {
+            return;
         }
-        @keyframes slideOut {
-            from {
-                transform: translateX(0);
-                opacity: 1;
+
+        const toastStyles = document.createElement('style');
+        toastStyles.textContent = `
+            @keyframes slideIn {
+                from {
+                    transform: translateX(400px);
+                    opacity: 0;
+                }
+                to {
+                    transform: translateX(0);
+                    opacity: 1;
+                }
             }
-            to {
-                transform: translateX(400px);
-                opacity: 0;
+            @keyframes slideOut {
+                from {
+                    transform: translateX(0);
+                    opacity: 1;
+                }
+                to {
+                    transform: translateX(400px);
+                    opacity: 0;
+                }
             }
-        }
-    `;
-    document.head.appendChild(toastStyles);
+        `;
+        document.head.appendChild(toastStyles);
+        toastStylesInitialized = true;
+    }
 
     // Функция для извлечения метаданных страницы
     function getPageMetadata() {
@@ -125,6 +136,9 @@
 
     // Функция для показа toast уведомления
     function showToast(message, type = 'success') {
+        // Инициализируем стили при первом вызове
+        initToastStyles();
+
         // Создаём toast элемент
         const toast = document.createElement('div');
         toast.textContent = message;
