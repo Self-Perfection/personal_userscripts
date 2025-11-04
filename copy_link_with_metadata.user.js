@@ -1,13 +1,14 @@
 // ==UserScript==
 // @name         Copy Page Link with Metadata
 // @namespace    http://tampermonkey.net/
-// @version      1.7
+// @version      1.8
 // @description  Copy current page link with title, thumbnail and metadata
 // @author       You
 // @match        *://*/*
 // @grant        GM_setClipboard
 // @grant        GM_registerMenuCommand
 // @downloadURL  https://raw.githubusercontent.com/Self-Perfection/personal_userscripts/refs/heads/main/copy_link_with_metadata.user.js
+// @changelog    1.8 - Исправлен баг: невидимый текст на кнопке отмены в диалоге (добавлен color: #333)
 // @changelog    1.7 - Добавлены og:url и og:title; выбор из до 3 URL и 2 title (только если различаются); показ источника для каждого варианта
 // @changelog    1.6 - Улучшено: ленивая инициализация стилей (создаются только при первом использовании)
 // @changelog    1.5 - Исправлена утечка памяти: стили toast уведомлений создаются один раз
@@ -221,7 +222,7 @@
                     ${optionsHtml}
                 </div>
                 <div style="text-align: right;">
-                    <button id="cancelBtn" style="padding: 8px 16px; margin-right: 8px; border: 1px solid #ddd; background: white; border-radius: 4px; cursor: pointer;">Отмена</button>
+                    <button id="cancelBtn" style="padding: 8px 16px; margin-right: 8px; border: 1px solid #ddd; background: white; color: #333; border-radius: 4px; cursor: pointer;">Отмена</button>
                     <button id="confirmBtn" style="padding: 8px 16px; background: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer;">Выбрать</button>
                 </div>
             `;
