@@ -1,13 +1,16 @@
 // ==UserScript==
 // @name         Copy Page Link with Metadata
 // @namespace    http://tampermonkey.net/
-// @version      1.7
+// @version      2.0
 // @description  Copy current page link with title, thumbnail and metadata
 // @author       You
 // @match        *://*/*
 // @grant        GM_setClipboard
 // @grant        GM_registerMenuCommand
 // @downloadURL  https://raw.githubusercontent.com/Self-Perfection/personal_userscripts/refs/heads/main/copy_link_with_metadata.user.js
+// @changelog    2.0 - Добавлено извлечение автора (article:author, author, twitter:creator); кликабельная ссылка если автор - URL
+// @changelog    1.9 - Расширена поддержка изображений: twitter:image, apple-touch-icon, фильтрация favicon < 32x32, умный выбор лучшего размера
+// @changelog    1.8 - Исправлен баг: невидимый текст на кнопке отмены в диалоге (добавлен color: #333)
 // @changelog    1.7 - Добавлены og:url и og:title; выбор из до 3 URL и 2 title (только если различаются); показ источника для каждого варианта
 // @changelog    1.6 - Улучшено: ленивая инициализация стилей (создаются только при первом использовании)
 // @changelog    1.5 - Исправлена утечка памяти: стили toast уведомлений создаются один раз
@@ -75,19 +78,90 @@
         const ogUrl = document.querySelector('meta[property="og:url"]');
         metadata.ogUrl = ogUrl ? ogUrl.content : null;
 
-        // Thumbnail (og:image или link[rel="image_src"])
+        // Thumbnail - собираем все возможные источники в порядке приоритета
+        // 1. Open Graph image (наиболее популярный)
         const ogImage = document.querySelector('meta[property="og:image"]');
-        const imageSrc = document.querySelector('link[rel="image_src"]');
-        metadata.thumbnail = ogImage ? ogImage.content : (imageSrc ? imageSrc.href : null);
+        if (ogImage && ogImage.content) {
+            metadata.thumbnail = ogImage.content;
+        }
 
-        // Fallback на favicon если нет thumbnail
+        // 2. Twitter Card image (fallback для Twitter)
         if (!metadata.thumbnail) {
-            const favicon = document.querySelector('link[rel="icon"], link[rel="shortcut icon"]');
-            metadata.thumbnail = favicon ? favicon.href : null;
+            const twitterImage = document.querySelector('meta[name="twitter:image"], meta[property="twitter:image"]');
+            if (twitterImage && twitterImage.content) {
+                metadata.thumbnail = twitterImage.content;
+            }
+        }
+
+        // 3. link[rel="image_src"] (старый стандарт)
+        if (!metadata.thumbnail) {
+            const imageSrc = document.querySelector('link[rel="image_src"]');
+            if (imageSrc && imageSrc.href) {
+                metadata.thumbnail = imageSrc.href;
+            }
+        }
+
+        // 4. Apple Touch Icon (обычно качественные изображения)
+        if (!metadata.thumbnail) {
+            // Ищем apple-touch-icon, предпочитая большие размеры
+            const appleTouchIcons = document.querySelectorAll(
+                'link[rel="apple-touch-icon"], link[rel="apple-touch-icon-precomposed"]'
+            );
+
+            // Сортируем по размеру (если указан), предпочитая большие
+            let bestAppleIcon = null;
+            let bestSize = 0;
+
+            appleTouchIcons.forEach(icon => {
+                const sizes = icon.getAttribute('sizes');
+                if (sizes) {
+                    const match = sizes.match(/(\d+)x(\d+)/);
+                    if (match) {
+                        const size = parseInt(match[1]);
+                        if (size > bestSize) {
+                            bestSize = size;
+                            bestAppleIcon = icon;
+                        }
+                    }
+                } else if (!bestAppleIcon) {
+                    bestAppleIcon = icon;
+                }
+            });
+
+            if (bestAppleIcon && bestAppleIcon.href) {
+                metadata.thumbnail = bestAppleIcon.href;
+            }
+        }
+
+        // 5. Favicon (последний fallback, только если >= 32x32 или размер неизвестен)
+        if (!metadata.thumbnail) {
+            const favicons = document.querySelectorAll('link[rel="icon"], link[rel="shortcut icon"]');
+
+            for (const favicon of favicons) {
+                if (!favicon.href) continue;
+
+                // Проверяем размер, если указан
+                const sizes = favicon.getAttribute('sizes');
+                if (sizes) {
+                    const match = sizes.match(/(\d+)x(\d+)/);
+                    if (match) {
+                        const size = parseInt(match[1]);
+                        // Игнорируем маленькие favicon (< 32x32)
+                        if (size >= 32) {
+                            metadata.thumbnail = favicon.href;
+                            break;
+                        }
+                    }
+                } else {
+                    // Размер не указан - используем
+                    metadata.thumbnail = favicon.href;
+                    break;
+                }
+            }
         }
 
         // Преобразуем относительные URL в абсолютные
-        if (metadata.thumbnail && !metadata.thumbnail.startsWith('http')) {
+        if (metadata.thumbnail && !metadata.thumbnail.startsWith('http') && !metadata.thumbnail.startsWith('data:')) {
             metadata.thumbnail = new URL(metadata.thumbnail, window.location.href).href;
         }
 
@@ -108,7 +182,41 @@
         const ogSiteName = document.querySelector('meta[property="og:site_name"]');
         metadata.siteName = ogSiteName ? ogSiteName.content : null;
 
+        // Author - собираем из разных источников, берем первый найденный
+        let author = null;
+
+        // 1. article:author (Open Graph для статей)
+        const articleAuthor = document.querySelector('meta[property="article:author"]');
+        if (articleAuthor && articleAuthor.content) {
+            author = articleAuthor.content;
+        }
+
+        // 2. author (стандартный meta тег)
+        if (!author) {
+            const metaAuthor = document.querySelector('meta[name="author"]');
+            if (metaAuthor && metaAuthor.content) {
+                author = metaAuthor.content;
+            }
+        }
+
+        // 3. twitter:creator (Twitter Cards)
+        if (!author) {
+            const twitterCreator = document.querySelector('meta[name="twitter:creator"], meta[property="twitter:creator"]');
+            if (twitterCreator && twitterCreator.content) {
+                author = twitterCreator.content;
+            }
+        }
+
+        metadata.author = author;
+
         return metadata;
+    }
+
+    // Функция для проверки, является ли строка URL
+    function isUrl(string) {
+        if (!string) return false;
+        // Простая проверка на URL
+        return string.startsWith('http://') || string.startsWith('https://') || string.startsWith('//');
     }
 
     // Функция для экранирования HTML
@@ -129,6 +237,19 @@
 
         // Создаём основную ссылку
         let linkHtml = `<a href="${escapeHtml(url)}">${title}</a>`;
+
+        // Добавляем автора, если есть
+        if (metadata.author) {
+            let authorHtml;
+            if (isUrl(metadata.author)) {
+                // Если автор - это URL, делаем его кликабельной ссылкой
+                authorHtml = `<a href="${escapeHtml(metadata.author)}">${escapeHtml(metadata.author)}</a>`;
+            } else {
+                // Если автор - это текст
+                authorHtml = escapeHtml(metadata.author);
+            }
+            linkHtml += `<br/><small>Автор: ${authorHtml}</small>`;
+        }
 
         // Добавляем description как видимый текст в <small>
         if (metadata.description) {
@@ -221,7 +342,7 @@
                     ${optionsHtml}
                 </div>
                 <div style="text-align: right;">
-                    <button id="cancelBtn" style="padding: 8px 16px; margin-right: 8px; border: 1px solid #ddd; background: white; border-radius: 4px; cursor: pointer;">Отмена</button>
+                    <button id="cancelBtn" style="padding: 8px 16px; margin-right: 8px; border: 1px solid #ddd; background: white; color: #333; border-radius: 4px; cursor: pointer;">Отмена</button>
                     <button id="confirmBtn" style="padding: 8px 16px; background: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer;">Выбрать</button>
                 </div>
             `;
