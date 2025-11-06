@@ -1,13 +1,14 @@
 // ==UserScript==
 // @name         Copy Page Link with Metadata
 // @namespace    http://tampermonkey.net/
-// @version      2.0
+// @version      2.1
 // @description  Copy current page link with title, thumbnail and metadata
 // @author       You
 // @match        *://*/*
 // @grant        GM_setClipboard
 // @grant        GM_registerMenuCommand
 // @downloadURL  https://raw.githubusercontent.com/Self-Perfection/personal_userscripts/refs/heads/main/copy_link_with_metadata.user.js
+// @changelog    2.1 - Исправлен баг: в диалоге выбора показывается финальный заголовок (с siteName), улучшена проверка дубликатов siteName
 // @changelog    2.0 - Добавлено извлечение автора (article:author, author, twitter:creator); кликабельная ссылка если автор - URL
 // @changelog    1.9 - Расширена поддержка изображений: twitter:image, apple-touch-icon, фильтрация favicon < 32x32, умный выбор лучшего размера
 // @changelog    1.8 - Исправлен баг: невидимый текст на кнопке отмены в диалоге (добавлен color: #333)
@@ -219,6 +220,26 @@
         return string.startsWith('http://') || string.startsWith('https://') || string.startsWith('//');
     }
 
+    // Функция для добавления siteName к заголовку, если его там нет
+    function addSiteNameToTitle(title, siteName) {
+        if (!siteName || !title) return title;
+
+        // Нормализуем для проверки: убираем пробелы, приводим к нижнему регистру
+        const normalizedTitle = title.toLowerCase().trim();
+        const normalizedSiteName = siteName.toLowerCase().trim();
+
+        // Проверяем различные варианты наличия siteName в title:
+        // 1. Прямое вхождение
+        // 2. В конце после дефиса " - "
+        // 3. В начале с дефисом " — "
+        if (normalizedTitle.includes(normalizedSiteName)) {
+            return title; // siteName уже есть в заголовке
+        }
+
+        // Добавляем siteName в начало
+        return siteName + ' — ' + title;
+    }
+
     // Функция для экранирования HTML
     function escapeHtml(text) {
         const div = document.createElement('div');
@@ -228,12 +249,8 @@
 
     // Функция для генерации HTML-ссылки
     function generateLink(url, metadata) {
-        let title = escapeHtml(metadata.title);
-
-        // Добавляем site name если есть
-        if (metadata.siteName && !metadata.title.includes(metadata.siteName)) {
-            title = escapeHtml(metadata.siteName) + ' — ' + title;
-        }
+        // metadata.title уже содержит siteName, если он был добавлен
+        const title = escapeHtml(metadata.title);
 
         // Создаём основную ссылку
         let linkHtml = `<a href="${escapeHtml(url)}">${title}</a>`;
@@ -436,24 +453,28 @@
 
             // document.title (всегда первый)
             if (metadata.documentTitle) {
+                const titleWithSiteName = addSiteNameToTitle(metadata.documentTitle, metadata.siteName);
                 titleOptions.push({
-                    value: metadata.documentTitle,
+                    value: titleWithSiteName,
                     label: 'Заголовок страницы',
                     source: 'document.title',
                     checked: true
                 });
-                seenTitles.add(metadata.documentTitle);
+                seenTitles.add(titleWithSiteName);
             }
 
             // og:title
-            if (metadata.ogTitle && !seenTitles.has(metadata.ogTitle)) {
-                titleOptions.push({
-                    value: metadata.ogTitle,
-                    label: 'Open Graph заголовок',
-                    source: 'og:title',
-                    checked: false
-                });
-                seenTitles.add(metadata.ogTitle);
+            if (metadata.ogTitle) {
+                const titleWithSiteName = addSiteNameToTitle(metadata.ogTitle, metadata.siteName);
+                if (!seenTitles.has(titleWithSiteName)) {
+                    titleOptions.push({
+                        value: titleWithSiteName,
+                        label: 'Open Graph заголовок',
+                        source: 'og:title',
+                        checked: false
+                    });
+                    seenTitles.add(titleWithSiteName);
+                }
             }
 
             // Показываем диалог выбора title только если есть варианты
