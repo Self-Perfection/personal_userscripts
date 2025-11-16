@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Infopedia Cross-Dictionary Links
 // @namespace    http://tampermonkey.net/
-// @version      1.0
+// @version      1.1
 // @description  Add cross-reference links between Português-Inglês and Português para Estrangeiros dictionaries
 // @author       You
 // @icon         https://www.infopedia.pt/apple-touch-icon.png
@@ -9,6 +9,7 @@
 // @match        https://www.infopedia.pt/dicionarios/portugues-estrangeiros/*
 // @grant        none
 // @downloadURL  https://raw.githubusercontent.com/Self-Perfection/personal_userscripts/refs/heads/main/infopedia_cross_dictionary_links.user.js
+// @changelog    1.1 - Добавлена иконка скрипта (apple-touch-icon.png)
 // ==/UserScript==
 
 (function() {
