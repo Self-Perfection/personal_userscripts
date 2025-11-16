@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Infopedia Cross-Dictionary Links
 // @namespace    http://tampermonkey.net/
-// @version      1.2
+// @version      1.3
 // @description  Add cross-reference links between Português-Inglês and Português para Estrangeiros dictionaries
 // @author       You
 // @icon         https://www.infopedia.pt/apple-touch-icon.png
@@ -9,6 +9,7 @@
 // @match        https://www.infopedia.pt/dicionarios/portugues-estrangeiros/*
 // @grant        none
 // @downloadURL  https://raw.githubusercontent.com/Self-Perfection/personal_userscripts/refs/heads/main/infopedia_cross_dictionary_links.user.js
+// @changelog    1.3 - Изменено место вставки ссылки: теперь в .menu-container (верхняя навигация)
 // @changelog    1.2 - Добавлено подробное логирование для отладки (console.log)
 // @changelog    1.1 - Добавлена иконка скрипта (apple-touch-icon.png)
 // ==/UserScript==
@@ -53,41 +54,46 @@
         // Ждём загрузки DOM
         function addCrossLink() {
             console.log('[Infopedia] Попытка добавить ссылку...');
-            const navContainer = document.querySelector('.nav-container');
-            const searchDicioContainer = document.querySelector('#search-dicio-container');
+            const menuContainer = document.querySelector('.menu-container');
+            const headerLogo = document.querySelector('.header-logo');
 
-            console.log('[Infopedia] navContainer:', navContainer);
-            console.log('[Infopedia] searchDicioContainer:', searchDicioContainer);
+            console.log('[Infopedia] menuContainer:', menuContainer);
+            console.log('[Infopedia] headerLogo:', headerLogo);
 
-            if (navContainer && searchDicioContainer) {
+            if (menuContainer && headerLogo) {
                 console.log('[Infopedia] Элементы найдены, создаём ссылку');
+
+                // Создаём обёртку с классом menu-container-cell
+                const linkWrapper = document.createElement('div');
+                linkWrapper.className = 'float-left menu-container-cell';
+                linkWrapper.style.cssText = 'margin-left: 15px; display: flex; align-items: center;';
 
                 // Создаём ссылку
                 const linkContainer = document.createElement('a');
                 linkContainer.href = targetDict;
-                linkContainer.style.cssText = 'display: inline-block; text-decoration: none; color: inherit; margin-left: 15px; vertical-align: top;';
+                linkContainer.style.cssText = 'text-decoration: none; color: inherit;';
 
                 const linkDiv = document.createElement('div');
-                linkDiv.className = 'dicionarios-pesquisa-dicio';
                 linkDiv.style.cssText = 'display: inline-flex; align-items: center; padding: 5px 10px; border: 1px solid #ddd; border-radius: 4px; background: #f9f9f9; cursor: pointer;';
                 linkDiv.onmouseover = function() { this.style.background = '#e9e9e9'; };
                 linkDiv.onmouseout = function() { this.style.background = '#f9f9f9'; };
 
                 const icon = document.createElement('img');
                 icon.src = iconSrc;
-                icon.style.cssText = 'width: 24px; margin-right: 5px; padding-bottom: 2px;';
+                icon.style.cssText = 'width: 24px; margin-right: 5px;';
+                icon.alt = linkText;
 
                 const titleDiv = document.createElement('div');
-                titleDiv.className = 'titulo-dicio';
                 titleDiv.textContent = linkText;
-                titleDiv.style.cssText = 'font-size: 14px;';
+                titleDiv.style.cssText = 'font-size: 14px; white-space: nowrap;';
 
                 linkDiv.appendChild(icon);
                 linkDiv.appendChild(titleDiv);
                 linkContainer.appendChild(linkDiv);
+                linkWrapper.appendChild(linkContainer);
 
-                // Вставляем после search-dicio-container
-                searchDicioContainer.parentNode.insertBefore(linkContainer, searchDicioContainer.nextSibling);
+                // Вставляем после header-logo
+                headerLogo.parentNode.insertBefore(linkWrapper, headerLogo.nextSibling);
                 console.log('[Infopedia] Ссылка добавлена успешно');
             } else {
                 console.log('[Infopedia] ОШИБКА: Не найдены необходимые элементы');
