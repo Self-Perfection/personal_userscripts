@@ -4,6 +4,7 @@
 // @version      1.0
 // @description  Add cross-reference links between Português-Inglês and Português para Estrangeiros dictionaries
 // @author       You
+// @icon         https://www.infopedia.pt/apple-touch-icon.png
 // @match        https://www.infopedia.pt/dicionarios/portugues-ingles/*
 // @match        https://www.infopedia.pt/dicionarios/portugues-estrangeiros/*
 // @grant        none
