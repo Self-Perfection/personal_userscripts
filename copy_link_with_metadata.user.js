@@ -1,13 +1,14 @@
 // ==UserScript==
 // @name         Copy Page Link with Metadata
 // @namespace    http://tampermonkey.net/
-// @version      2.1
+// @version      2.2
 // @description  Copy current page link with title, thumbnail and metadata
 // @author       You
 // @match        *://*/*
 // @grant        GM_setClipboard
 // @grant        GM_registerMenuCommand
 // @downloadURL  https://raw.githubusercontent.com/Self-Perfection/personal_userscripts/refs/heads/main/copy_link_with_metadata.user.js
+// @changelog    2.2 - Добавлена очистка URL: удаление пустого # в конце и UTM/tracking параметров (utm_*, fbclid, gclid и др.)
 // @changelog    2.1 - Исправлен баг: в диалоге выбора показывается финальный заголовок (с siteName), улучшена проверка дубликатов siteName
 // @changelog    2.0 - Добавлено извлечение автора (article:author, author, twitter:creator); кликабельная ссылка если автор - URL
 // @changelog    1.9 - Расширена поддержка изображений: twitter:image, apple-touch-icon, фильтрация favicon < 32x32, умный выбор лучшего размера
@@ -220,6 +221,40 @@
         return string.startsWith('http://') || string.startsWith('https://') || string.startsWith('//');
     }
 
+    // Функция для очистки URL от tracking параметров и пустого якоря
+    function cleanUrl(url) {
+        if (!url) return url;
+
+        try {
+            const urlObj = new URL(url);
+
+            // Удаляем UTM параметры и другие tracking параметры
+            const paramsToRemove = [
+                'utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content',
+                'fbclid', 'gclid', 'msclkid', 'mc_cid', 'mc_eid'
+            ];
+
+            paramsToRemove.forEach(param => {
+                urlObj.searchParams.delete(param);
+            });
+
+            // Собираем URL без hash, если hash пустой
+            let result = urlObj.toString();
+
+            // Удаляем одинокий # в конце (но сохраняем якоря типа #section)
+            if (urlObj.hash === '#' || urlObj.hash === '') {
+                // Убираем # из конца строки
+                result = result.replace(/#$/, '');
+            }
+
+            return result;
+        } catch (e) {
+            // Если URL невалидный, возвращаем как есть
+            console.warn('Failed to clean URL:', url, e);
+            return url;
+        }
+    }
+
     // Функция для добавления siteName к заголовку, если его там нет
     function addSiteNameToTitle(title, siteName) {
         if (!siteName || !title) return title;
@@ -402,39 +437,44 @@
             let selectedUrl = metadata.url;
             let selectedTitle = metadata.title;
 
+            // Очищаем все URL от tracking параметров и пустого якоря
+            const currentUrl = cleanUrl(metadata.url);
+            const canonicalUrl = metadata.canonicalUrl ? cleanUrl(metadata.canonicalUrl) : null;
+            const ogUrl = metadata.ogUrl ? cleanUrl(metadata.ogUrl) : null;
+
             // Собираем уникальные URL для выбора
             const urlOptions = [];
             const seenUrls = new Set();
 
             // Текущий URL (всегда первый)
             urlOptions.push({
-                value: metadata.url,
+                value: currentUrl,
                 label: 'Текущий URL',
                 source: 'window.location.href',
                 checked: true
             });
-            seenUrls.add(metadata.url);
+            seenUrls.add(currentUrl);
 
             // Canonical URL
-            if (metadata.canonicalUrl && !seenUrls.has(metadata.canonicalUrl)) {
+            if (canonicalUrl && !seenUrls.has(canonicalUrl)) {
                 urlOptions.push({
-                    value: metadata.canonicalUrl,
+                    value: canonicalUrl,
                     label: 'Канонический URL',
                     source: 'link[rel="canonical"]',
                     checked: false
                 });
-                seenUrls.add(metadata.canonicalUrl);
+                seenUrls.add(canonicalUrl);
             }
 
             // OG URL
-            if (metadata.ogUrl && !seenUrls.has(metadata.ogUrl)) {
+            if (ogUrl && !seenUrls.has(ogUrl)) {
                 urlOptions.push({
-                    value: metadata.ogUrl,
+                    value: ogUrl,
                     label: 'Open Graph URL',
                     source: 'og:url',
                     checked: false
                 });
-                seenUrls.add(metadata.ogUrl);
+                seenUrls.add(ogUrl);
             }
 
             // Показываем диалог выбора URL только если есть варианты
