@@ -67,7 +67,8 @@
                         margin-left: 5px !important;
                     }
                     .infopedia-cross-link-container {
-                        padding: 5px !important;
+                        height: 40px !important;
+                        padding: 0 8px !important;
                     }
                 }
             `;
@@ -95,13 +96,13 @@
 
                 const linkDiv = document.createElement('div');
                 linkDiv.className = 'infopedia-cross-link-container';
-                linkDiv.style.cssText = 'display: inline-flex; align-items: center; padding: 5px 10px; border: 1px solid #ddd; border-radius: 4px; background: #f9f9f9; cursor: pointer;';
+                linkDiv.style.cssText = 'display: inline-flex; align-items: center; height: 48px; padding: 0 10px; border: 1px solid #ddd; border-radius: 4px; background: #f9f9f9; cursor: pointer;';
                 linkDiv.onmouseover = function() { this.style.background = '#e9e9e9'; };
                 linkDiv.onmouseout = function() { this.style.background = '#f9f9f9'; };
 
                 const icon = document.createElement('img');
                 icon.src = iconSrc;
-                icon.style.cssText = 'width: 24px; margin-right: 5px;';
+                icon.style.cssText = 'height: 100%; margin-right: 8px;';
                 icon.alt = linkText;
 
                 const titleDiv = document.createElement('div');
