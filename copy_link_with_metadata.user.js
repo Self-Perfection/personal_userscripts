@@ -1,13 +1,15 @@
 // ==UserScript==
 // @name         Copy Page Link with Metadata
 // @namespace    http://tampermonkey.net/
-// @version      2.2
+// @version      2.4
 // @description  Copy current page link with title, thumbnail and metadata
 // @author       You
 // @match        *://*/*
 // @grant        GM_setClipboard
 // @grant        GM_registerMenuCommand
 // @downloadURL  https://raw.githubusercontent.com/Self-Perfection/personal_userscripts/refs/heads/main/copy_link_with_metadata.user.js
+// @changelog    2.4 - Исправлено: относительные URL (canonical, og:url) преобразуются в абсолютные для корректного сравнения
+// @changelog    2.3 - Исправлена видимость radio buttons в диалоге на страницах с appearance:none в глобальных стилях
 // @changelog    2.2 - Добавлена очистка URL: удаление пустого # в конце и UTM/tracking параметров (utm_*, fbclid, gclid и др.)
 // @changelog    2.1 - Исправлен баг: в диалоге выбора показывается финальный заголовок (с siteName), улучшена проверка дубликатов siteName
 // @changelog    2.0 - Добавлено извлечение автора (article:author, author, twitter:creator); кликабельная ссылка если автор - URL
@@ -74,11 +76,15 @@
 
         // Canonical link
         const canonicalLink = document.querySelector('link[rel="canonical"]');
-        metadata.canonicalUrl = canonicalLink ? canonicalLink.href : null;
+        metadata.canonicalUrl = canonicalLink && canonicalLink.href
+            ? new URL(canonicalLink.href, window.location.href).href
+            : null;
 
         // OG URL
         const ogUrl = document.querySelector('meta[property="og:url"]');
-        metadata.ogUrl = ogUrl ? ogUrl.content : null;
+        metadata.ogUrl = ogUrl && ogUrl.content
+            ? new URL(ogUrl.content, window.location.href).href
+            : null;
 
         // Thumbnail - собираем все возможные источники в порядке приоритета
         // 1. Open Graph image (наиболее популярный)
@@ -382,7 +388,7 @@
             // Генерируем опции
             const optionsHtml = options.map((opt, idx) => `
                 <label style="display: block; margin-bottom: 12px; cursor: pointer;">
-                    <input type="radio" name="${fieldName}" value="${idx}" ${opt.checked ? 'checked' : ''} style="margin-right: 8px;">
+                    <input type="radio" name="${fieldName}" value="${idx}" ${opt.checked ? 'checked' : ''} style="margin-right: 8px; appearance: auto; -webkit-appearance: radio; -moz-appearance: radio; width: auto; height: auto; padding: 0; border: none; border-radius: 0; cursor: pointer;">
                     <strong>${escapeHtml(opt.label)}${opt.source ? ` <span style="color: #999; font-weight: normal;">(${escapeHtml(opt.source)})</span>` : ''}</strong><br>
                     <span style="margin-left: 24px; word-break: break-all; color: #666;">${escapeHtml(opt.value)}</span>
                 </label>
