@@ -1,13 +1,14 @@
 // ==UserScript==
 // @name         Copy Page Link with Metadata
 // @namespace    http://tampermonkey.net/
-// @version      2.3
+// @version      2.4
 // @description  Copy current page link with title, thumbnail and metadata
 // @author       You
 // @match        *://*/*
 // @grant        GM_setClipboard
 // @grant        GM_registerMenuCommand
 // @downloadURL  https://raw.githubusercontent.com/Self-Perfection/personal_userscripts/refs/heads/main/copy_link_with_metadata.user.js
+// @changelog    2.4 - Исправлено: относительные URL (canonical, og:url) преобразуются в абсолютные для корректного сравнения
 // @changelog    2.3 - Исправлена видимость radio buttons в диалоге на страницах с appearance:none в глобальных стилях
 // @changelog    2.2 - Добавлена очистка URL: удаление пустого # в конце и UTM/tracking параметров (utm_*, fbclid, gclid и др.)
 // @changelog    2.1 - Исправлен баг: в диалоге выбора показывается финальный заголовок (с siteName), улучшена проверка дубликатов siteName
@@ -75,11 +76,15 @@
 
         // Canonical link
         const canonicalLink = document.querySelector('link[rel="canonical"]');
-        metadata.canonicalUrl = canonicalLink ? canonicalLink.href : null;
+        metadata.canonicalUrl = canonicalLink && canonicalLink.href
+            ? new URL(canonicalLink.href, window.location.href).href
+            : null;
 
         // OG URL
         const ogUrl = document.querySelector('meta[property="og:url"]');
-        metadata.ogUrl = ogUrl ? ogUrl.content : null;
+        metadata.ogUrl = ogUrl && ogUrl.content
+            ? new URL(ogUrl.content, window.location.href).href
+            : null;
 
         // Thumbnail - собираем все возможные источники в порядке приоритета
         // 1. Open Graph image (наиболее популярный)
