@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Infopedia Cross-Dictionary Links
 // @namespace    http://tampermonkey.net/
-// @version      1.5
+// @version      1.6
 // @description  Add cross-reference links between Português-Inglês and Português para Estrangeiros dictionaries
 // @author       You
 // @icon         https://www.infopedia.pt/apple-touch-icon.png
@@ -9,7 +9,9 @@
 // @match        https://www.infopedia.pt/dicionarios/portugues-estrangeiros/*
 // @grant        GM_setValue
 // @grant        GM_getValue
+// @grant        GM_registerMenuCommand
 // @downloadURL  https://raw.githubusercontent.com/Self-Perfection/personal_userscripts/refs/heads/main/infopedia_cross_dictionary_links.user.js
+// @changelog    1.6 - Диалог настроек вызывается через GM_registerMenuCommand (убрана кнопка со страницы)
 // @changelog    1.5 - Добавлена автоочистка cookies с настройками и статистикой удалений
 // @changelog    1.4 - Адаптивная вёрстка: на мобильных устройствах отображается только иконка
 // @changelog    1.3 - Изменено место вставки ссылки: теперь в .menu-container (верхняя навигация)
@@ -263,6 +265,9 @@
         startCleanup();
     }
 
+    // Регистрируем команду в меню userscript manager
+    GM_registerMenuCommand('Настройки автоочистки cookies', createSettingsDialog);
+
     // ========== END COOKIE AUTO-CLEANUP FUNCTIONALITY ==========
 
     // Определяем текущий словарь и целевой словарь
@@ -295,52 +300,38 @@
 
     console.log('[Infopedia] Целевой словарь:', targetDict);
 
-    // Функция для добавления элементов в навигацию
-    function addNavigationElements() {
-        console.log('[Infopedia] Попытка добавить элементы навигации...');
+    // Если определили целевой словарь, добавляем ссылку
+    if (targetDict) {
+        // Ждём загрузки DOM
+        function addCrossLink() {
+            console.log('[Infopedia] Попытка добавить ссылку...');
 
-        // Добавляем стили для адаптивной вёрстки
-        const style = document.createElement('style');
-        style.textContent = `
-            @media (max-width: 767px) {
-                .infopedia-cross-link-text {
-                    display: none !important;
+            // Добавляем стили для адаптивной вёрстки
+            const style = document.createElement('style');
+            style.textContent = `
+                @media (max-width: 767px) {
+                    .infopedia-cross-link-text {
+                        display: none !important;
+                    }
+                    .infopedia-cross-link-wrapper {
+                        margin-left: 5px !important;
+                    }
+                    .infopedia-cross-link-container {
+                        height: 40px !important;
+                        padding: 0 8px !important;
+                    }
                 }
-                .infopedia-cross-link-wrapper {
-                    margin-left: 5px !important;
-                }
-                .infopedia-cross-link-container {
-                    height: 40px !important;
-                    padding: 0 8px !important;
-                }
-                .infopedia-settings-text {
-                    display: none !important;
-                }
-                .infopedia-settings-wrapper {
-                    margin-left: 5px !important;
-                }
-                .infopedia-settings-container {
-                    height: 40px !important;
-                    padding: 0 8px !important;
-                }
-            }
-        `;
-        document.head.appendChild(style);
+            `;
+            document.head.appendChild(style);
 
-        const menuContainer = document.querySelector('.menu-container');
-        const headerLogo = document.querySelector('.header-logo');
+            const menuContainer = document.querySelector('.menu-container');
+            const headerLogo = document.querySelector('.header-logo');
 
-        console.log('[Infopedia] menuContainer:', menuContainer);
-        console.log('[Infopedia] headerLogo:', headerLogo);
+            console.log('[Infopedia] menuContainer:', menuContainer);
+            console.log('[Infopedia] headerLogo:', headerLogo);
 
-        if (menuContainer && headerLogo) {
-            console.log('[Infopedia] Элементы найдены');
-
-            let insertAfter = headerLogo;
-
-            // Добавляем кросс-ссылку, если определён целевой словарь
-            if (targetDict) {
-                console.log('[Infopedia] Создаём кросс-ссылку');
+            if (menuContainer && headerLogo) {
+                console.log('[Infopedia] Элементы найдены, создаём ссылку');
 
                 // Создаём обёртку с классом menu-container-cell
                 const linkWrapper = document.createElement('div');
@@ -376,54 +367,22 @@
 
                 // Вставляем после header-logo
                 headerLogo.parentNode.insertBefore(linkWrapper, headerLogo.nextSibling);
-                insertAfter = linkWrapper;
-                console.log('[Infopedia] Кросс-ссылка добавлена');
+                console.log('[Infopedia] Ссылка добавлена успешно');
+            } else {
+                console.log('[Infopedia] ОШИБКА: Не найдены необходимые элементы');
             }
-
-            // Добавляем кнопку настроек (всегда)
-            console.log('[Infopedia] Создаём кнопку настроек');
-
-            const settingsWrapper = document.createElement('div');
-            settingsWrapper.className = 'float-left menu-container-cell infopedia-settings-wrapper';
-            settingsWrapper.style.cssText = 'margin-left: 10px; display: flex; align-items: center;';
-
-            const settingsDiv = document.createElement('div');
-            settingsDiv.className = 'infopedia-settings-container';
-            settingsDiv.style.cssText = 'display: inline-flex; align-items: center; height: 48px; padding: 0 10px; border: 1px solid #ddd; border-radius: 4px; background: #f9f9f9; cursor: pointer;';
-            settingsDiv.title = 'Настройки автоочистки cookies';
-            settingsDiv.onmouseover = function() { this.style.background = '#e9e9e9'; };
-            settingsDiv.onmouseout = function() { this.style.background = '#f9f9f9'; };
-            settingsDiv.onclick = createSettingsDialog;
-
-            // Иконка шестерёнки (⚙)
-            const settingsIcon = document.createElement('span');
-            settingsIcon.textContent = '⚙';
-            settingsIcon.style.cssText = 'font-size: 24px; margin-right: 8px;';
-
-            const settingsText = document.createElement('div');
-            settingsText.className = 'infopedia-settings-text';
-            settingsText.textContent = 'Настройки cookies';
-            settingsText.style.cssText = 'font-size: 14px; white-space: nowrap;';
-
-            settingsDiv.appendChild(settingsIcon);
-            settingsDiv.appendChild(settingsText);
-            settingsWrapper.appendChild(settingsDiv);
-
-            // Вставляем после предыдущего элемента
-            insertAfter.parentNode.insertBefore(settingsWrapper, insertAfter.nextSibling);
-            console.log('[Infopedia] Кнопка настроек добавлена');
-        } else {
-            console.log('[Infopedia] ОШИБКА: Не найдены необходимые элементы');
         }
-    }
 
-    // Пытаемся добавить сразу, если DOM уже загружен
-    console.log('[Infopedia] document.readyState:', document.readyState);
-    if (document.readyState === 'loading') {
-        console.log('[Infopedia] DOM ещё загружается, ждём DOMContentLoaded');
-        document.addEventListener('DOMContentLoaded', addNavigationElements);
+        // Пытаемся добавить сразу, если DOM уже загружен
+        console.log('[Infopedia] document.readyState:', document.readyState);
+        if (document.readyState === 'loading') {
+            console.log('[Infopedia] DOM ещё загружается, ждём DOMContentLoaded');
+            document.addEventListener('DOMContentLoaded', addCrossLink);
+        } else {
+            console.log('[Infopedia] DOM уже загружен, добавляем ссылку сразу');
+            addCrossLink();
+        }
     } else {
-        console.log('[Infopedia] DOM уже загружен, добавляем элементы сразу');
-        addNavigationElements();
+        console.log('[Infopedia] Целевой словарь не определён, скрипт завершён');
     }
 })();
