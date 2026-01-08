@@ -1,16 +1,16 @@
 // ==UserScript==
 // @name         Infopedia Cross-Dictionary Links
 // @namespace    http://tampermonkey.net/
-// @version      1.6
-// @description  Add cross-reference links between Português-Inglês and Português para Estrangeiros dictionaries
+// @version      1.7
+// @description  Add cross-reference links between Português-Inglês, Português para Estrangeiros and Língua Portuguesa dictionaries
 // @author       You
 // @icon         https://www.infopedia.pt/apple-touch-icon.png
-// @match        https://www.infopedia.pt/dicionarios/portugues-ingles/*
-// @match        https://www.infopedia.pt/dicionarios/portugues-estrangeiros/*
+// @match        https://www.infopedia.pt/dicionarios/*
 // @grant        GM_setValue
 // @grant        GM_getValue
 // @grant        GM_registerMenuCommand
 // @downloadURL  https://raw.githubusercontent.com/Self-Perfection/personal_userscripts/refs/heads/main/infopedia_cross_dictionary_links.user.js
+// @changelog    1.7 - Добавлен третий словарь (Língua Portuguesa), множественные кросс-ссылки, пунктирная рамка для иконки Português para Estrangeiros
 // @changelog    1.6 - Диалог настроек вызывается через GM_registerMenuCommand (убрана кнопка со страницы)
 // @changelog    1.5 - Добавлена автоочистка cookies с настройками и статистикой удалений
 // @changelog    1.4 - Адаптивная вёрстка: на мобильных устройствах отображается только иконка
@@ -270,41 +270,60 @@
 
     // ========== END COOKIE AUTO-CLEANUP FUNCTIONALITY ==========
 
-    // Определяем текущий словарь и целевой словарь
+    // ========== CROSS-DICTIONARY LINKS FUNCTIONALITY ==========
+
+    // Конфигурация словарей
+    const DICTIONARIES = [
+        {
+            path: 'portugues-ingles',
+            name: 'Português-Inglês',
+            icon: '/images/bandeira-en.svg',
+            borderStyle: null
+        },
+        {
+            path: 'portugues-estrangeiros',
+            name: 'Português para Estrangeiros',
+            icon: '/images/bandeira-pt.svg',
+            borderStyle: '2px dashed #999'
+        },
+        {
+            path: 'lingua-portuguesa',
+            name: 'Língua Portuguesa',
+            icon: '/images/bandeira-pt.svg',
+            borderStyle: null
+        }
+    ];
+
+    // Определяем текущий словарь
     const currentPath = window.location.pathname;
     console.log('[Infopedia] Текущий путь:', currentPath);
 
-    let targetDict = null;
-    let iconSrc = null;
-    let linkText = null;
+    let currentDict = null;
+    let currentWord = null;
 
-    if (currentPath.includes('/dicionarios/portugues-ingles/')) {
-        // Мы в Português-Inglês, создаём ссылку на Português para Estrangeiros
-        const word = currentPath.split('/dicionarios/portugues-ingles/')[1];
-        console.log('[Infopedia] Словарь: Português-Inglês, слово:', word);
-        if (word) {
-            targetDict = `/dicionarios/portugues-estrangeiros/${word}`;
-            iconSrc = '/images/bandeira-pt.svg';
-            linkText = 'Português para Estrangeiros';
-        }
-    } else if (currentPath.includes('/dicionarios/portugues-estrangeiros/')) {
-        // Мы в Português para Estrangeiros, создаём ссылку на Português-Inglês
-        const word = currentPath.split('/dicionarios/portugues-estrangeiros/')[1];
-        console.log('[Infopedia] Словарь: Português para Estrangeiros, слово:', word);
-        if (word) {
-            targetDict = `/dicionarios/portugues-ingles/${word}`;
-            iconSrc = '/images/bandeira-en.svg';
-            linkText = 'Português-Inglês';
+    // Находим текущий тип словаря
+    for (const dict of DICTIONARIES) {
+        const pattern = `/dicionarios/${dict.path}/`;
+        if (currentPath.includes(pattern)) {
+            currentDict = dict;
+            currentWord = currentPath.split(pattern)[1];
+            console.log('[Infopedia] Словарь:', dict.name, ', слово:', currentWord);
+            break;
         }
     }
 
-    console.log('[Infopedia] Целевой словарь:', targetDict);
+    // Создаём список целевых словарей (все кроме текущего)
+    const targetDictionaries = currentDict
+        ? DICTIONARIES.filter(dict => dict !== currentDict)
+        : [];
 
-    // Если определили целевой словарь, добавляем ссылку
-    if (targetDict) {
+    console.log('[Infopedia] Целевые словари:', targetDictionaries.map(d => d.name));
+
+    // Если определили текущий словарь и слово, добавляем ссылки на другие словари
+    if (currentDict && currentWord && targetDictionaries.length > 0) {
         // Ждём загрузки DOM
-        function addCrossLink() {
-            console.log('[Infopedia] Попытка добавить ссылку...');
+        function addCrossLinks() {
+            console.log('[Infopedia] Попытка добавить ссылки...');
 
             // Добавляем стили для адаптивной вёрстки
             const style = document.createElement('style');
@@ -331,43 +350,62 @@
             console.log('[Infopedia] headerLogo:', headerLogo);
 
             if (menuContainer && headerLogo) {
-                console.log('[Infopedia] Элементы найдены, создаём ссылку');
+                console.log('[Infopedia] Элементы найдены, создаём ссылки');
 
-                // Создаём обёртку с классом menu-container-cell
-                const linkWrapper = document.createElement('div');
-                linkWrapper.className = 'float-left menu-container-cell infopedia-cross-link-wrapper';
-                linkWrapper.style.cssText = 'margin-left: 15px; display: flex; align-items: center;';
+                let insertAfter = headerLogo;
 
-                // Создаём ссылку
-                const linkContainer = document.createElement('a');
-                linkContainer.href = targetDict;
-                linkContainer.title = linkText; // Подсказка при наведении/тапе
-                linkContainer.style.cssText = 'text-decoration: none; color: inherit;';
+                // Создаём ссылку для каждого целевого словаря
+                targetDictionaries.forEach(targetDict => {
+                    const targetUrl = `/dicionarios/${targetDict.path}/${currentWord}`;
 
-                const linkDiv = document.createElement('div');
-                linkDiv.className = 'infopedia-cross-link-container';
-                linkDiv.style.cssText = 'display: inline-flex; align-items: center; height: 48px; padding: 0 10px; border: 1px solid #ddd; border-radius: 4px; background: #f9f9f9; cursor: pointer;';
-                linkDiv.onmouseover = function() { this.style.background = '#e9e9e9'; };
-                linkDiv.onmouseout = function() { this.style.background = '#f9f9f9'; };
+                    // Создаём обёртку с классом menu-container-cell
+                    const linkWrapper = document.createElement('div');
+                    linkWrapper.className = 'float-left menu-container-cell infopedia-cross-link-wrapper';
+                    linkWrapper.style.cssText = 'margin-left: 15px; display: flex; align-items: center;';
 
-                const icon = document.createElement('img');
-                icon.src = iconSrc;
-                icon.style.cssText = 'height: 100%; margin-right: 8px;';
-                icon.alt = linkText;
+                    // Создаём ссылку
+                    const linkContainer = document.createElement('a');
+                    linkContainer.href = targetUrl;
+                    linkContainer.title = targetDict.name; // Подсказка при наведении/тапе
+                    linkContainer.style.cssText = 'text-decoration: none; color: inherit;';
 
-                const titleDiv = document.createElement('div');
-                titleDiv.className = 'infopedia-cross-link-text';
-                titleDiv.textContent = linkText;
-                titleDiv.style.cssText = 'font-size: 14px; white-space: nowrap;';
+                    const linkDiv = document.createElement('div');
+                    linkDiv.className = 'infopedia-cross-link-container';
+                    linkDiv.style.cssText = 'display: inline-flex; align-items: center; height: 48px; padding: 0 10px; border: 1px solid #ddd; border-radius: 4px; background: #f9f9f9; cursor: pointer;';
+                    linkDiv.onmouseover = function() { this.style.background = '#e9e9e9'; };
+                    linkDiv.onmouseout = function() { this.style.background = '#f9f9f9'; };
 
-                linkDiv.appendChild(icon);
-                linkDiv.appendChild(titleDiv);
-                linkContainer.appendChild(linkDiv);
-                linkWrapper.appendChild(linkContainer);
+                    const icon = document.createElement('img');
+                    icon.src = targetDict.icon;
+                    icon.style.cssText = 'height: 100%; margin-right: 8px;';
+                    icon.alt = targetDict.name;
 
-                // Вставляем после header-logo
-                headerLogo.parentNode.insertBefore(linkWrapper, headerLogo.nextSibling);
-                console.log('[Infopedia] Ссылка добавлена успешно');
+                    // Применяем стиль рамки если задан
+                    if (targetDict.borderStyle) {
+                        icon.style.border = targetDict.borderStyle;
+                        icon.style.borderRadius = '3px';
+                        icon.style.padding = '2px';
+                        icon.style.boxSizing = 'border-box';
+                    }
+
+                    const titleDiv = document.createElement('div');
+                    titleDiv.className = 'infopedia-cross-link-text';
+                    titleDiv.textContent = targetDict.name;
+                    titleDiv.style.cssText = 'font-size: 14px; white-space: nowrap;';
+
+                    linkDiv.appendChild(icon);
+                    linkDiv.appendChild(titleDiv);
+                    linkContainer.appendChild(linkDiv);
+                    linkWrapper.appendChild(linkContainer);
+
+                    // Вставляем после предыдущего элемента
+                    insertAfter.parentNode.insertBefore(linkWrapper, insertAfter.nextSibling);
+                    insertAfter = linkWrapper; // Следующая ссылка будет вставлена после этой
+
+                    console.log('[Infopedia] Добавлена ссылка на:', targetDict.name);
+                });
+
+                console.log('[Infopedia] Все ссылки добавлены успешно');
             } else {
                 console.log('[Infopedia] ОШИБКА: Не найдены необходимые элементы');
             }
@@ -377,12 +415,12 @@
         console.log('[Infopedia] document.readyState:', document.readyState);
         if (document.readyState === 'loading') {
             console.log('[Infopedia] DOM ещё загружается, ждём DOMContentLoaded');
-            document.addEventListener('DOMContentLoaded', addCrossLink);
+            document.addEventListener('DOMContentLoaded', addCrossLinks);
         } else {
-            console.log('[Infopedia] DOM уже загружен, добавляем ссылку сразу');
-            addCrossLink();
+            console.log('[Infopedia] DOM уже загружен, добавляем ссылки сразу');
+            addCrossLinks();
         }
     } else {
-        console.log('[Infopedia] Целевой словарь не определён, скрипт завершён');
+        console.log('[Infopedia] Текущий словарь не определён или нет целевых словарей, скрипт завершён');
     }
 })();
