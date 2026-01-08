@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Infopedia Cross-Dictionary Links
 // @namespace    http://tampermonkey.net/
-// @version      1.7
+// @version      1.8
 // @description  Add cross-reference links between Português-Inglês, Português para Estrangeiros and Língua Portuguesa dictionaries
 // @author       You
 // @icon         https://www.infopedia.pt/apple-touch-icon.png
@@ -10,6 +10,7 @@
 // @grant        GM_getValue
 // @grant        GM_registerMenuCommand
 // @downloadURL  https://raw.githubusercontent.com/Self-Perfection/personal_userscripts/refs/heads/main/infopedia_cross_dictionary_links.user.js
+// @changelog    1.8 - Пунктирная рамка перенесена на всю кнопку, иконка Português para Estrangeiros использует CSS filter вместо рамки
 // @changelog    1.7 - Добавлен третий словарь (Língua Portuguesa), множественные кросс-ссылки, пунктирная рамка для иконки Português para Estrangeiros
 // @changelog    1.6 - Диалог настроек вызывается через GM_registerMenuCommand (убрана кнопка со страницы)
 // @changelog    1.5 - Добавлена автоочистка cookies с настройками и статистикой удалений
@@ -278,19 +279,22 @@
             path: 'portugues-ingles',
             name: 'Português-Inglês',
             icon: '/images/bandeira-en.svg',
-            borderStyle: null
+            iconFilter: null,
+            buttonBorderStyle: null
         },
         {
             path: 'portugues-estrangeiros',
             name: 'Português para Estrangeiros',
             icon: '/images/bandeira-pt.svg',
-            borderStyle: '2px dashed #999'
+            iconFilter: 'saturate(0.5) brightness(1.2)',
+            buttonBorderStyle: '2px dashed #999'
         },
         {
             path: 'lingua-portuguesa',
             name: 'Língua Portuguesa',
             icon: '/images/bandeira-pt.svg',
-            borderStyle: null
+            iconFilter: null,
+            buttonBorderStyle: null
         }
     ];
 
@@ -375,17 +379,19 @@
                     linkDiv.onmouseover = function() { this.style.background = '#e9e9e9'; };
                     linkDiv.onmouseout = function() { this.style.background = '#f9f9f9'; };
 
+                    // Применяем пунктирную рамку на всю кнопку если задана
+                    if (targetDict.buttonBorderStyle) {
+                        linkDiv.style.border = targetDict.buttonBorderStyle;
+                    }
+
                     const icon = document.createElement('img');
                     icon.src = targetDict.icon;
                     icon.style.cssText = 'height: 100%; margin-right: 8px;';
                     icon.alt = targetDict.name;
 
-                    // Применяем стиль рамки если задан
-                    if (targetDict.borderStyle) {
-                        icon.style.border = targetDict.borderStyle;
-                        icon.style.borderRadius = '3px';
-                        icon.style.padding = '2px';
-                        icon.style.boxSizing = 'border-box';
+                    // Применяем CSS filter на иконку если задан
+                    if (targetDict.iconFilter) {
+                        icon.style.filter = targetDict.iconFilter;
                     }
 
                     const titleDiv = document.createElement('div');
