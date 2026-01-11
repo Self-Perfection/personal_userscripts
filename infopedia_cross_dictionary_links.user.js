@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Infopedia Cross-Dictionary Links
 // @namespace    http://tampermonkey.net/
-// @version      1.8
+// @version      1.9
 // @description  Add cross-reference links between Português-Inglês, Português para Estrangeiros and Língua Portuguesa dictionaries
 // @author       You
 // @icon         https://www.infopedia.pt/apple-touch-icon.png
@@ -10,6 +10,7 @@
 // @grant        GM_getValue
 // @grant        GM_registerMenuCommand
 // @downloadURL  https://raw.githubusercontent.com/Self-Perfection/personal_userscripts/refs/heads/main/infopedia_cross_dictionary_links.user.js
+// @changelog    1.9 - Уменьшен логотип на мобильных устройствах для предотвращения наложения кнопок
 // @changelog    1.8 - Пунктирная рамка перенесена на всю кнопку, иконка Português para Estrangeiros использует CSS filter вместо рамки
 // @changelog    1.7 - Добавлен третий словарь (Língua Portuguesa), множественные кросс-ссылки, пунктирная рамка для иконки Português para Estrangeiros
 // @changelog    1.6 - Диалог настроек вызывается через GM_registerMenuCommand (убрана кнопка со страницы)
@@ -333,6 +334,16 @@
             const style = document.createElement('style');
             style.textContent = `
                 @media (max-width: 767px) {
+                    /* Уменьшаем логотип на мобильных */
+                    .header-logo {
+                        max-width: 120px !important;
+                    }
+                    .header-logo img {
+                        max-width: 100% !important;
+                        height: auto !important;
+                    }
+
+                    /* Скрываем текст, показываем только иконки */
                     .infopedia-cross-link-text {
                         display: none !important;
                     }
