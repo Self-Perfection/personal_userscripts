@@ -1,13 +1,14 @@
 // ==UserScript==
 // @name         Copy Page Link with Metadata
 // @namespace    http://tampermonkey.net/
-// @version      2.4
+// @version      2.5
 // @description  Copy current page link with title, thumbnail and metadata
 // @author       You
 // @match        *://*/*
 // @grant        GM_setClipboard
 // @grant        GM_registerMenuCommand
 // @downloadURL  https://raw.githubusercontent.com/Self-Perfection/personal_userscripts/refs/heads/main/copy_link_with_metadata.user.js
+// @changelog    2.5 - Исправлено: нормализация заголовков перед сравнением (удаление переносов строк и лишних пробелов)
 // @changelog    2.4 - Исправлено: относительные URL (canonical, og:url) преобразуются в абсолютные для корректного сравнения
 // @changelog    2.3 - Исправлена видимость radio buttons в диалоге на страницах с appearance:none в глобальных стилях
 // @changelog    2.2 - Добавлена очистка URL: удаление пустого # в конце и UTM/tracking параметров (utm_*, fbclid, gclid и др.)
@@ -261,6 +262,16 @@
         }
     }
 
+    // Функция для нормализации заголовков (удаление переносов строк и лишних пробелов)
+    function normalizeTitle(title) {
+        if (!title) return title;
+
+        return title
+            .replace(/[\r\n]+/g, ' ')  // Заменяем переносы строк на пробелы
+            .replace(/\s+/g, ' ')       // Заменяем множественные пробелы на одинарные
+            .trim();                     // Убираем пробелы в начале и конце
+    }
+
     // Функция для добавления siteName к заголовку, если его там нет
     function addSiteNameToTitle(title, siteName) {
         if (!siteName || !title) return title;
@@ -499,7 +510,8 @@
 
             // document.title (всегда первый)
             if (metadata.documentTitle) {
-                const titleWithSiteName = addSiteNameToTitle(metadata.documentTitle, metadata.siteName);
+                const normalizedDocTitle = normalizeTitle(metadata.documentTitle);
+                const titleWithSiteName = addSiteNameToTitle(normalizedDocTitle, metadata.siteName);
                 titleOptions.push({
                     value: titleWithSiteName,
                     label: 'Заголовок страницы',
@@ -511,7 +523,8 @@
 
             // og:title
             if (metadata.ogTitle) {
-                const titleWithSiteName = addSiteNameToTitle(metadata.ogTitle, metadata.siteName);
+                const normalizedOgTitle = normalizeTitle(metadata.ogTitle);
+                const titleWithSiteName = addSiteNameToTitle(normalizedOgTitle, metadata.siteName);
                 if (!seenTitles.has(titleWithSiteName)) {
                     titleOptions.push({
                         value: titleWithSiteName,
