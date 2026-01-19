@@ -1,13 +1,14 @@
 // ==UserScript==
 // @name         Copy Page Link with Metadata
 // @namespace    http://tampermonkey.net/
-// @version      2.5
+// @version      2.6
 // @description  Copy current page link with title, thumbnail and metadata
 // @author       You
 // @match        *://*/*
 // @grant        GM_setClipboard
 // @grant        GM_registerMenuCommand
 // @downloadURL  https://raw.githubusercontent.com/Self-Perfection/personal_userscripts/refs/heads/main/copy_link_with_metadata.user.js
+// @changelog    2.6 - Исправлено: игнорирование различий http/https при сравнении URL (диалог не показывается, если URL отличаются только протоколом)
 // @changelog    2.5 - Исправлено: нормализация заголовков перед сравнением (удаление переносов строк и лишних пробелов)
 // @changelog    2.4 - Исправлено: относительные URL (canonical, og:url) преобразуются в абсолютные для корректного сравнения
 // @changelog    2.3 - Исправлена видимость radio buttons в диалоге на страницах с appearance:none в глобальных стилях
@@ -262,6 +263,12 @@
         }
     }
 
+    // Функция для нормализации URL при сравнении (приводит http к https)
+    function normalizeUrlForComparison(url) {
+        if (!url) return url;
+        return url.replace(/^http:\/\//i, 'https://');
+    }
+
     // Функция для нормализации заголовков (удаление переносов строк и лишних пробелов)
     function normalizeTitle(title) {
         if (!title) return title;
@@ -470,28 +477,28 @@
                 source: 'window.location.href',
                 checked: true
             });
-            seenUrls.add(currentUrl);
+            seenUrls.add(normalizeUrlForComparison(currentUrl));
 
             // Canonical URL
-            if (canonicalUrl && !seenUrls.has(canonicalUrl)) {
+            if (canonicalUrl && !seenUrls.has(normalizeUrlForComparison(canonicalUrl))) {
                 urlOptions.push({
                     value: canonicalUrl,
                     label: 'Канонический URL',
                     source: 'link[rel="canonical"]',
                     checked: false
                 });
-                seenUrls.add(canonicalUrl);
+                seenUrls.add(normalizeUrlForComparison(canonicalUrl));
             }
 
             // OG URL
-            if (ogUrl && !seenUrls.has(ogUrl)) {
+            if (ogUrl && !seenUrls.has(normalizeUrlForComparison(ogUrl))) {
                 urlOptions.push({
                     value: ogUrl,
                     label: 'Open Graph URL',
                     source: 'og:url',
                     checked: false
                 });
-                seenUrls.add(ogUrl);
+                seenUrls.add(normalizeUrlForComparison(ogUrl));
             }
 
             // Показываем диалог выбора URL только если есть варианты
