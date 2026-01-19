@@ -1,13 +1,14 @@
 // ==UserScript==
 // @name         Copy Page Link with Metadata
 // @namespace    http://tampermonkey.net/
-// @version      2.6
+// @version      2.7
 // @description  Copy current page link with title, thumbnail and metadata
 // @author       You
 // @match        *://*/*
 // @grant        GM_setClipboard
 // @grant        GM_registerMenuCommand
 // @downloadURL  https://raw.githubusercontent.com/Self-Perfection/personal_userscripts/refs/heads/main/copy_link_with_metadata.user.js
+// @changelog    2.7 - Улучшено: автоматическое удаление коротких заголовков, если они полностью содержатся в других вариантах
 // @changelog    2.6 - Исправлено: игнорирование различий http/https при сравнении URL (диалог не показывается, если URL отличаются только протоколом)
 // @changelog    2.5 - Исправлено: нормализация заголовков перед сравнением (удаление переносов строк и лишних пробелов)
 // @changelog    2.4 - Исправлено: относительные URL (canonical, og:url) преобразуются в абсолютные для корректного сравнения
@@ -511,35 +512,50 @@
                 }
             }
 
-            // Собираем варианты title для выбора
-            const titleOptions = [];
-            const seenTitles = new Set();
+            // Собираем все варианты title
+            const allTitles = [];
 
-            // document.title (всегда первый)
+            // document.title
             if (metadata.documentTitle) {
                 const normalizedDocTitle = normalizeTitle(metadata.documentTitle);
                 const titleWithSiteName = addSiteNameToTitle(normalizedDocTitle, metadata.siteName);
-                titleOptions.push({
+                allTitles.push({
                     value: titleWithSiteName,
                     label: 'Заголовок страницы',
-                    source: 'document.title',
-                    checked: true
+                    source: 'document.title'
                 });
-                seenTitles.add(titleWithSiteName);
             }
 
             // og:title
             if (metadata.ogTitle) {
                 const normalizedOgTitle = normalizeTitle(metadata.ogTitle);
                 const titleWithSiteName = addSiteNameToTitle(normalizedOgTitle, metadata.siteName);
-                if (!seenTitles.has(titleWithSiteName)) {
+                allTitles.push({
+                    value: titleWithSiteName,
+                    label: 'Open Graph заголовок',
+                    source: 'og:title'
+                });
+            }
+
+            // Фильтруем: удаляем заголовки, которые полностью содержатся в других
+            const titleOptions = [];
+            const seenTitles = new Set();
+
+            for (const title of allTitles) {
+                // Проверяем, не содержится ли этот заголовок полностью в каком-то другом
+                const isContained = allTitles.some(other =>
+                    other !== title &&
+                    other.value.toLowerCase().includes(title.value.toLowerCase())
+                );
+
+                if (!isContained && !seenTitles.has(title.value)) {
                     titleOptions.push({
-                        value: titleWithSiteName,
-                        label: 'Open Graph заголовок',
-                        source: 'og:title',
-                        checked: false
+                        value: title.value,
+                        label: title.label,
+                        source: title.source,
+                        checked: titleOptions.length === 0 // Первый добавленный будет checked
                     });
-                    seenTitles.add(titleWithSiteName);
+                    seenTitles.add(title.value);
                 }
             }
 
