@@ -1,13 +1,16 @@
 // ==UserScript==
 // @name         Copy Page Link with Metadata
 // @namespace    http://tampermonkey.net/
-// @version      2.7
+// @version      2.8
 // @description  Copy current page link with title, thumbnail and metadata
 // @author       You
 // @match        *://*/*
 // @grant        GM_setClipboard
 // @grant        GM_registerMenuCommand
+// @grant        GM_setValue
+// @grant        GM_getValue
 // @downloadURL  https://raw.githubusercontent.com/Self-Perfection/personal_userscripts/refs/heads/main/copy_link_with_metadata.user.js
+// @changelog    2.8 - Добавлена возможность запомнить предпочтения выбора URL и заголовка для каждого домена
 // @changelog    2.7 - Улучшено: автоматическое удаление коротких заголовков, если они полностью содержатся в других вариантах
 // @changelog    2.6 - Исправлено: игнорирование различий http/https при сравнении URL (диалог не показывается, если URL отличаются только протоколом)
 // @changelog    2.5 - Исправлено: нормализация заголовков перед сравнением (удаление переносов строк и лишних пробелов)
@@ -375,9 +378,56 @@
         }, 3000);
     }
 
+    // Функции для работы с предпочтениями доменов
+    const PREFERENCES_KEY = 'domainPreferences';
+
+    // Получить домен из URL
+    function getDomainFromUrl(url) {
+        try {
+            const urlObj = new URL(url);
+            return urlObj.hostname;
+        } catch (e) {
+            console.warn('Failed to extract domain from URL:', url, e);
+            return null;
+        }
+    }
+
+    // Загрузить все предпочтения
+    function loadPreferences() {
+        try {
+            const stored = GM_getValue(PREFERENCES_KEY, '{}');
+            return JSON.parse(stored);
+        } catch (e) {
+            console.warn('Failed to load preferences:', e);
+            return {};
+        }
+    }
+
+    // Сохранить предпочтения для домена
+    function savePreference(domain, titlePreference, urlPreference) {
+        try {
+            const prefs = loadPreferences();
+            prefs[domain] = {
+                titlePreference: titlePreference,
+                urlPreference: urlPreference
+            };
+            GM_setValue(PREFERENCES_KEY, JSON.stringify(prefs));
+        } catch (e) {
+            console.error('Failed to save preferences:', e);
+        }
+    }
+
+    // Получить предпочтения для домена
+    function getPreference(domain) {
+        const prefs = loadPreferences();
+        return prefs[domain] || null;
+    }
+
     // Универсальная функция для показа диалога выбора
     // options: [{value: '...', label: '...', source: '...', checked: true/false}, ...]
-    function showChoiceDialog(title, options, fieldName = 'choice') {
+    // showRememberCheckbox: если true, показывает чекбокс "Запомнить выбор для этого домена"
+    // Возвращает: {value: selectedValue, remember: checkboxState} или null при отмене
+    function showChoiceDialog(title, options, fieldName = 'choice', showRememberCheckbox = false) {
         return new Promise((resolve) => {
             // Создаём модальное окно
             const overlay = document.createElement('div');
@@ -413,11 +463,22 @@
                 </label>
             `).join('');
 
+            // Чекбокс "Запомнить" (если нужен)
+            const rememberCheckboxHtml = showRememberCheckbox ? `
+                <div style="margin: 16px 0; padding-top: 12px; border-top: 1px solid #eee;">
+                    <label style="cursor: pointer; display: inline-flex; align-items: center;">
+                        <input type="checkbox" id="rememberChoice" style="margin-right: 8px; appearance: auto; -webkit-appearance: checkbox; -moz-appearance: checkbox; width: auto; height: auto; cursor: pointer;">
+                        <span style="color: #666;">Запомнить выбор для этого домена</span>
+                    </label>
+                </div>
+            ` : '';
+
             dialog.innerHTML = `
                 <h3 style="margin-top: 0;">${escapeHtml(title)}</h3>
                 <div style="margin: 16px 0;">
                     ${optionsHtml}
                 </div>
+                ${rememberCheckboxHtml}
                 <div style="text-align: right;">
                     <button id="cancelBtn" style="padding: 8px 16px; margin-right: 8px; border: 1px solid #ddd; background: white; color: #333; border-radius: 4px; cursor: pointer;">Отмена</button>
                     <button id="confirmBtn" style="padding: 8px 16px; background: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer;">Выбрать</button>
@@ -434,8 +495,12 @@
             confirmBtn.onclick = () => {
                 const selected = dialog.querySelector(`input[name="${fieldName}"]:checked`);
                 const selectedIdx = parseInt(selected.value);
+                const remember = showRememberCheckbox ? dialog.querySelector('#rememberChoice').checked : false;
                 document.body.removeChild(overlay);
-                resolve(options[selectedIdx].value);
+                resolve({
+                    value: options[selectedIdx].value,
+                    remember: remember
+                });
             };
 
             cancelBtn.onclick = () => {
@@ -461,6 +526,12 @@
             const metadata = getPageMetadata();
             let selectedUrl = metadata.url;
             let selectedTitle = metadata.title;
+            let selectedUrlType = 'current';
+            let selectedTitleType = 'document.title';
+
+            // Получаем домен и загружаем предпочтения
+            const domain = getDomainFromUrl(metadata.url);
+            const preferences = domain ? getPreference(domain) : null;
 
             // Очищаем все URL от tracking параметров и пустого якоря
             const currentUrl = cleanUrl(metadata.url);
@@ -476,6 +547,7 @@
                 value: currentUrl,
                 label: 'Текущий URL',
                 source: 'window.location.href',
+                type: 'current',
                 checked: true
             });
             seenUrls.add(normalizeUrlForComparison(currentUrl));
@@ -486,6 +558,7 @@
                     value: canonicalUrl,
                     label: 'Канонический URL',
                     source: 'link[rel="canonical"]',
+                    type: 'canonical',
                     checked: false
                 });
                 seenUrls.add(normalizeUrlForComparison(canonicalUrl));
@@ -497,6 +570,7 @@
                     value: ogUrl,
                     label: 'Open Graph URL',
                     source: 'og:url',
+                    type: 'og:url',
                     checked: false
                 });
                 seenUrls.add(normalizeUrlForComparison(ogUrl));
@@ -504,11 +578,50 @@
 
             // Показываем диалог выбора URL только если есть варианты
             if (urlOptions.length > 1) {
-                selectedUrl = await showChoiceDialog('Выберите URL для копирования', urlOptions, 'urlChoice');
+                // Проверяем, есть ли сохраненное предпочтение для URL
+                if (preferences && preferences.urlPreference) {
+                    // Ищем опцию с соответствующим типом
+                    const preferredOption = urlOptions.find(opt => opt.type === preferences.urlPreference);
+                    if (preferredOption) {
+                        selectedUrl = preferredOption.value;
+                        selectedUrlType = preferredOption.type;
+                    } else {
+                        // Предпочтение есть, но соответствующий URL недоступен - показываем диалог
+                        const result = await showChoiceDialog('Выберите URL для копирования', urlOptions, 'urlChoice', true);
 
-                if (!selectedUrl) {
-                    showToast('Копирование отменено', 'error');
-                    return;
+                        if (!result) {
+                            showToast('Копирование отменено', 'error');
+                            return;
+                        }
+
+                        selectedUrl = result.value;
+                        // Находим тип выбранного URL
+                        const selectedOption = urlOptions.find(opt => opt.value === result.value);
+                        selectedUrlType = selectedOption ? selectedOption.type : 'current';
+
+                        // Сохраняем предпочтение, если пользователь отметил чекбокс
+                        if (result.remember && domain) {
+                            savePreference(domain, preferences?.titlePreference || null, selectedUrlType);
+                        }
+                    }
+                } else {
+                    // Нет сохраненного предпочтения - показываем диалог
+                    const result = await showChoiceDialog('Выберите URL для копирования', urlOptions, 'urlChoice', true);
+
+                    if (!result) {
+                        showToast('Копирование отменено', 'error');
+                        return;
+                    }
+
+                    selectedUrl = result.value;
+                    // Находим тип выбранного URL
+                    const selectedOption = urlOptions.find(opt => opt.value === result.value);
+                    selectedUrlType = selectedOption ? selectedOption.type : 'current';
+
+                    // Сохраняем предпочтение, если пользователь отметил чекбокс
+                    if (result.remember && domain) {
+                        savePreference(domain, preferences?.titlePreference || null, selectedUrlType);
+                    }
                 }
             }
 
@@ -522,7 +635,8 @@
                 allTitles.push({
                     value: titleWithSiteName,
                     label: 'Заголовок страницы',
-                    source: 'document.title'
+                    source: 'document.title',
+                    type: 'document.title'
                 });
             }
 
@@ -533,7 +647,8 @@
                 allTitles.push({
                     value: titleWithSiteName,
                     label: 'Open Graph заголовок',
-                    source: 'og:title'
+                    source: 'og:title',
+                    type: 'og:title'
                 });
             }
 
@@ -553,6 +668,7 @@
                         value: title.value,
                         label: title.label,
                         source: title.source,
+                        type: title.type,
                         checked: titleOptions.length === 0 // Первый добавленный будет checked
                     });
                     seenTitles.add(title.value);
@@ -561,11 +677,50 @@
 
             // Показываем диалог выбора title только если есть варианты
             if (titleOptions.length > 1) {
-                selectedTitle = await showChoiceDialog('Выберите заголовок', titleOptions, 'titleChoice');
+                // Проверяем, есть ли сохраненное предпочтение для заголовка
+                if (preferences && preferences.titlePreference) {
+                    // Ищем опцию с соответствующим типом
+                    const preferredOption = titleOptions.find(opt => opt.type === preferences.titlePreference);
+                    if (preferredOption) {
+                        selectedTitle = preferredOption.value;
+                        selectedTitleType = preferredOption.type;
+                    } else {
+                        // Предпочтение есть, но соответствующий заголовок недоступен - показываем диалог
+                        const result = await showChoiceDialog('Выберите заголовок', titleOptions, 'titleChoice', true);
 
-                if (!selectedTitle) {
-                    showToast('Копирование отменено', 'error');
-                    return;
+                        if (!result) {
+                            showToast('Копирование отменено', 'error');
+                            return;
+                        }
+
+                        selectedTitle = result.value;
+                        // Находим тип выбранного заголовка
+                        const selectedOption = titleOptions.find(opt => opt.value === result.value);
+                        selectedTitleType = selectedOption ? selectedOption.type : 'document.title';
+
+                        // Сохраняем предпочтение, если пользователь отметил чекбокс
+                        if (result.remember && domain) {
+                            savePreference(domain, selectedTitleType, preferences?.urlPreference || selectedUrlType);
+                        }
+                    }
+                } else {
+                    // Нет сохраненного предпочтения - показываем диалог
+                    const result = await showChoiceDialog('Выберите заголовок', titleOptions, 'titleChoice', true);
+
+                    if (!result) {
+                        showToast('Копирование отменено', 'error');
+                        return;
+                    }
+
+                    selectedTitle = result.value;
+                    // Находим тип выбранного заголовка
+                    const selectedOption = titleOptions.find(opt => opt.value === result.value);
+                    selectedTitleType = selectedOption ? selectedOption.type : 'document.title';
+
+                    // Сохраняем предпочтение, если пользователь отметил чекбокс
+                    if (result.remember && domain) {
+                        savePreference(domain, selectedTitleType, preferences?.urlPreference || selectedUrlType);
+                    }
                 }
             }
 
