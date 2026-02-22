@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Copy Page Link with Metadata
 // @namespace    http://tampermonkey.net/
-// @version      2.8
+// @version      2.9
 // @description  Copy current page link with title, thumbnail and metadata
 // @author       You
 // @match        *://*/*
@@ -10,6 +10,7 @@
 // @grant        GM_setValue
 // @grant        GM_getValue
 // @downloadURL  https://raw.githubusercontent.com/Self-Perfection/personal_userscripts/refs/heads/main/copy_link_with_metadata.user.js
+// @changelog    2.9 - Исправлено позиционирование диалога на мобильных (замена div overlay на HTML <dialog>)
 // @changelog    2.8 - Добавлена возможность запомнить предпочтения выбора URL и заголовка для каждого домена
 // @changelog    2.7 - Улучшено: автоматическое удаление коротких заголовков, если они полностью содержатся в других вариантах
 // @changelog    2.6 - Исправлено: игнорирование различий http/https при сравнении URL (диалог не показывается, если URL отличаются только протоколом)
@@ -64,6 +65,25 @@
         `;
         document.head.appendChild(toastStyles);
         toastStylesInitialized = true;
+    }
+
+    // Флаг для отслеживания, были ли добавлены стили диалога
+    let dialogStylesInitialized = false;
+
+    // Функция для ленивой инициализации стилей диалога (::backdrop нельзя стилизовать inline)
+    function initDialogStyles() {
+        if (dialogStylesInitialized) {
+            return;
+        }
+
+        const dialogStyles = document.createElement('style');
+        dialogStyles.textContent = `
+            dialog.userscript-copy-link-dialog::backdrop {
+                background: rgba(0,0,0,0.5);
+            }
+        `;
+        document.head.appendChild(dialogStyles);
+        dialogStylesInitialized = true;
     }
 
     // Функция для извлечения метаданных страницы
@@ -429,29 +449,24 @@
     // Возвращает: {value: selectedValue, remember: checkboxState} или null при отмене
     function showChoiceDialog(title, options, fieldName = 'choice', showRememberCheckbox = false) {
         return new Promise((resolve) => {
-            // Создаём модальное окно
-            const overlay = document.createElement('div');
-            overlay.style.cssText = `
-                position: fixed;
-                top: 0;
-                left: 0;
-                width: 100%;
-                height: 100%;
-                background: rgba(0,0,0,0.5);
-                z-index: 9999;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-            `;
+            // Инициализируем стили ::backdrop при первом вызове
+            initDialogStyles();
 
-            const dialog = document.createElement('div');
-            dialog.style.cssText = `
+            // Создаём модальное окно через <dialog> — оно рендерится в top layer браузера,
+            // что гарантирует корректное позиционирование даже если на странице есть
+            // CSS transform/filter/will-change на элементах-предках
+            const dialogEl = document.createElement('dialog');
+            dialogEl.className = 'userscript-copy-link-dialog';
+            dialogEl.style.cssText = `
                 background: white;
                 padding: 24px;
                 border-radius: 8px;
                 box-shadow: 0 4px 20px rgba(0,0,0,0.3);
                 max-width: 600px;
+                width: calc(100vw - 32px);
+                box-sizing: border-box;
                 font-family: Arial, sans-serif;
+                border: none;
             `;
 
             // Генерируем опции
@@ -473,7 +488,7 @@
                 </div>
             ` : '';
 
-            dialog.innerHTML = `
+            dialogEl.innerHTML = `
                 <h3 style="margin-top: 0;">${escapeHtml(title)}</h3>
                 <div style="margin: 16px 0;">
                     ${optionsHtml}
@@ -485,18 +500,19 @@
                 </div>
             `;
 
-            overlay.appendChild(dialog);
-            document.body.appendChild(overlay);
+            document.body.appendChild(dialogEl);
+            dialogEl.showModal();
 
             // Обработчики кнопок
-            const confirmBtn = dialog.querySelector('#confirmBtn');
-            const cancelBtn = dialog.querySelector('#cancelBtn');
+            const confirmBtn = dialogEl.querySelector('#confirmBtn');
+            const cancelBtn = dialogEl.querySelector('#cancelBtn');
 
             confirmBtn.onclick = () => {
-                const selected = dialog.querySelector(`input[name="${fieldName}"]:checked`);
+                const selected = dialogEl.querySelector(`input[name="${fieldName}"]:checked`);
                 const selectedIdx = parseInt(selected.value);
-                const remember = showRememberCheckbox ? dialog.querySelector('#rememberChoice').checked : false;
-                document.body.removeChild(overlay);
+                const remember = showRememberCheckbox ? dialogEl.querySelector('#rememberChoice').checked : false;
+                dialogEl.close();
+                dialogEl.remove();
                 resolve({
                     value: options[selectedIdx].value,
                     remember: remember
@@ -504,19 +520,16 @@
             };
 
             cancelBtn.onclick = () => {
-                document.body.removeChild(overlay);
+                dialogEl.close();
+                dialogEl.remove();
                 resolve(null);
             };
 
-            // ESC для закрытия
-            const escHandler = (e) => {
-                if (e.key === 'Escape') {
-                    document.body.removeChild(overlay);
-                    document.removeEventListener('keydown', escHandler);
-                    resolve(null);
-                }
-            };
-            document.addEventListener('keydown', escHandler);
+            // ESC для закрытия (нативное событие cancel элемента <dialog>)
+            dialogEl.addEventListener('cancel', () => {
+                dialogEl.remove();
+                resolve(null);
+            });
         });
     }
 
