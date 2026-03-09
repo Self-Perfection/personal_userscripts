@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Copy Page Link with Metadata
 // @namespace    http://tampermonkey.net/
-// @version      2.8
+// @version      3.0
 // @description  Copy current page link with title, thumbnail and metadata
 // @author       You
 // @match        *://*/*
@@ -10,6 +10,8 @@
 // @grant        GM_setValue
 // @grant        GM_getValue
 // @downloadURL  https://raw.githubusercontent.com/Self-Perfection/personal_userscripts/refs/heads/main/copy_link_with_metadata.user.js
+// @changelog    3.0 - Исправлено: галочка "Запомнить" сохраняет только выбор из своего диалога, не затрагивая другое поле
+// @changelog    2.9 - Исправлена совместимость с YouTube (CSP Trusted Types): диалог строится через DOM вместо innerHTML; улучшены сообщения об ошибках с указанием этапа
 // @changelog    2.8 - Добавлена возможность запомнить предпочтения выбора URL и заголовка для каждого домена
 // @changelog    2.7 - Улучшено: автоматическое удаление коротких заголовков, если они полностью содержатся в других вариантах
 // @changelog    2.6 - Исправлено: игнорирование различий http/https при сравнении URL (диалог не показывается, если URL отличаются только протоколом)
@@ -417,6 +419,28 @@
         }
     }
 
+    // Сохранить только предпочтение URL для домена (не затрагивает titlePreference)
+    function saveUrlPreference(domain, urlPreference) {
+        try {
+            const prefs = loadPreferences();
+            prefs[domain] = Object.assign({}, prefs[domain] || {}, { urlPreference });
+            GM_setValue(PREFERENCES_KEY, JSON.stringify(prefs));
+        } catch (e) {
+            console.error('Failed to save URL preference:', e);
+        }
+    }
+
+    // Сохранить только предпочтение заголовка для домена (не затрагивает urlPreference)
+    function saveTitlePreference(domain, titlePreference) {
+        try {
+            const prefs = loadPreferences();
+            prefs[domain] = Object.assign({}, prefs[domain] || {}, { titlePreference });
+            GM_setValue(PREFERENCES_KEY, JSON.stringify(prefs));
+        } catch (e) {
+            console.error('Failed to save title preference:', e);
+        }
+    }
+
     // Получить предпочтения для домена
     function getPreference(domain) {
         const prefs = loadPreferences();
@@ -429,7 +453,7 @@
     // Возвращает: {value: selectedValue, remember: checkboxState} или null при отмене
     function showChoiceDialog(title, options, fieldName = 'choice', showRememberCheckbox = false) {
         return new Promise((resolve) => {
-            // Создаём модальное окно
+            // Создаём модальное окно через DOM (без innerHTML — совместимо с CSP Trusted Types)
             const overlay = document.createElement('div');
             overlay.style.cssText = `
                 position: fixed;
@@ -454,48 +478,96 @@
                 font-family: Arial, sans-serif;
             `;
 
-            // Генерируем опции
-            const optionsHtml = options.map((opt, idx) => `
-                <label style="display: block; margin-bottom: 12px; cursor: pointer;">
-                    <input type="radio" name="${fieldName}" value="${idx}" ${opt.checked ? 'checked' : ''} style="margin-right: 8px; appearance: auto; -webkit-appearance: radio; -moz-appearance: radio; width: auto; height: auto; padding: 0; border: none; border-radius: 0; cursor: pointer;">
-                    <strong>${escapeHtml(opt.label)}${opt.source ? ` <span style="color: #999; font-weight: normal;">(${escapeHtml(opt.source)})</span>` : ''}</strong><br>
-                    <span style="margin-left: 24px; word-break: break-all; color: #666;">${escapeHtml(opt.value)}</span>
-                </label>
-            `).join('');
+            // Заголовок диалога
+            const h3 = document.createElement('h3');
+            h3.style.marginTop = '0';
+            h3.textContent = title;
+            dialog.appendChild(h3);
+
+            // Контейнер с опциями
+            const optionsDiv = document.createElement('div');
+            optionsDiv.style.margin = '16px 0';
+
+            options.forEach((opt, idx) => {
+                const label = document.createElement('label');
+                label.style.cssText = 'display: block; margin-bottom: 12px; cursor: pointer;';
+
+                const input = document.createElement('input');
+                input.type = 'radio';
+                input.name = fieldName;
+                input.value = String(idx);
+                input.checked = opt.checked || false;
+                input.style.cssText = 'margin-right: 8px; appearance: auto; -webkit-appearance: radio; -moz-appearance: radio; width: auto; height: auto; padding: 0; border: none; border-radius: 0; cursor: pointer;';
+
+                const strong = document.createElement('strong');
+                strong.textContent = opt.label;
+                if (opt.source) {
+                    const sourceSpan = document.createElement('span');
+                    sourceSpan.style.cssText = 'color: #999; font-weight: normal;';
+                    sourceSpan.textContent = ` (${opt.source})`;
+                    strong.appendChild(sourceSpan);
+                }
+
+                const valueSpan = document.createElement('span');
+                valueSpan.style.cssText = 'display: block; margin-left: 24px; word-break: break-all; color: #666;';
+                valueSpan.textContent = opt.value;
+
+                label.appendChild(input);
+                label.appendChild(strong);
+                label.appendChild(document.createElement('br'));
+                label.appendChild(valueSpan);
+                optionsDiv.appendChild(label);
+            });
+
+            dialog.appendChild(optionsDiv);
 
             // Чекбокс "Запомнить" (если нужен)
-            const rememberCheckboxHtml = showRememberCheckbox ? `
-                <div style="margin: 16px 0; padding-top: 12px; border-top: 1px solid #eee;">
-                    <label style="cursor: pointer; display: inline-flex; align-items: center;">
-                        <input type="checkbox" id="rememberChoice" style="margin-right: 8px; appearance: auto; -webkit-appearance: checkbox; -moz-appearance: checkbox; width: auto; height: auto; cursor: pointer;">
-                        <span style="color: #666;">Запомнить выбор для этого домена</span>
-                    </label>
-                </div>
-            ` : '';
+            let rememberCheckbox = null;
+            if (showRememberCheckbox) {
+                const rememberDiv = document.createElement('div');
+                rememberDiv.style.cssText = 'margin: 16px 0; padding-top: 12px; border-top: 1px solid #eee;';
 
-            dialog.innerHTML = `
-                <h3 style="margin-top: 0;">${escapeHtml(title)}</h3>
-                <div style="margin: 16px 0;">
-                    ${optionsHtml}
-                </div>
-                ${rememberCheckboxHtml}
-                <div style="text-align: right;">
-                    <button id="cancelBtn" style="padding: 8px 16px; margin-right: 8px; border: 1px solid #ddd; background: white; color: #333; border-radius: 4px; cursor: pointer;">Отмена</button>
-                    <button id="confirmBtn" style="padding: 8px 16px; background: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer;">Выбрать</button>
-                </div>
-            `;
+                const rememberLabel = document.createElement('label');
+                rememberLabel.style.cssText = 'cursor: pointer; display: inline-flex; align-items: center;';
+
+                rememberCheckbox = document.createElement('input');
+                rememberCheckbox.type = 'checkbox';
+                rememberCheckbox.style.cssText = 'margin-right: 8px; appearance: auto; -webkit-appearance: checkbox; -moz-appearance: checkbox; width: auto; height: auto; cursor: pointer;';
+
+                const rememberText = document.createElement('span');
+                rememberText.style.color = '#666';
+                rememberText.textContent = 'Запомнить выбор для этого домена';
+
+                rememberLabel.appendChild(rememberCheckbox);
+                rememberLabel.appendChild(rememberText);
+                rememberDiv.appendChild(rememberLabel);
+                dialog.appendChild(rememberDiv);
+            }
+
+            // Кнопки
+            const buttonsDiv = document.createElement('div');
+            buttonsDiv.style.textAlign = 'right';
+
+            const cancelBtn = document.createElement('button');
+            cancelBtn.textContent = 'Отмена';
+            cancelBtn.style.cssText = 'padding: 8px 16px; margin-right: 8px; border: 1px solid #ddd; background: white; color: #333; border-radius: 4px; cursor: pointer;';
+
+            const confirmBtn = document.createElement('button');
+            confirmBtn.textContent = 'Выбрать';
+            confirmBtn.style.cssText = 'padding: 8px 16px; background: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer;';
+
+            buttonsDiv.appendChild(cancelBtn);
+            buttonsDiv.appendChild(confirmBtn);
+            dialog.appendChild(buttonsDiv);
 
             overlay.appendChild(dialog);
             document.body.appendChild(overlay);
 
             // Обработчики кнопок
-            const confirmBtn = dialog.querySelector('#confirmBtn');
-            const cancelBtn = dialog.querySelector('#cancelBtn');
-
             confirmBtn.onclick = () => {
                 const selected = dialog.querySelector(`input[name="${fieldName}"]:checked`);
                 const selectedIdx = parseInt(selected.value);
-                const remember = showRememberCheckbox ? dialog.querySelector('#rememberChoice').checked : false;
+                const remember = rememberCheckbox ? rememberCheckbox.checked : false;
                 document.body.removeChild(overlay);
                 resolve({
                     value: options[selectedIdx].value,
@@ -522,7 +594,9 @@
 
     // Основная функция
     async function copyPageLink() {
+        let stage = 'инициализация';
         try {
+            stage = 'получение метаданных';
             const metadata = getPageMetadata();
             let selectedUrl = metadata.url;
             let selectedTitle = metadata.title;
@@ -577,6 +651,7 @@
             }
 
             // Показываем диалог выбора URL только если есть варианты
+            stage = 'диалог выбора URL';
             if (urlOptions.length > 1) {
                 // Проверяем, есть ли сохраненное предпочтение для URL
                 if (preferences && preferences.urlPreference) {
@@ -601,7 +676,7 @@
 
                         // Сохраняем предпочтение, если пользователь отметил чекбокс
                         if (result.remember && domain) {
-                            savePreference(domain, preferences?.titlePreference || null, selectedUrlType);
+                            saveUrlPreference(domain, selectedUrlType);
                         }
                     }
                 } else {
@@ -620,7 +695,7 @@
 
                     // Сохраняем предпочтение, если пользователь отметил чекбокс
                     if (result.remember && domain) {
-                        savePreference(domain, preferences?.titlePreference || null, selectedUrlType);
+                        saveUrlPreference(domain, selectedUrlType);
                     }
                 }
             }
@@ -676,6 +751,7 @@
             }
 
             // Показываем диалог выбора title только если есть варианты
+            stage = 'диалог выбора заголовка';
             if (titleOptions.length > 1) {
                 // Проверяем, есть ли сохраненное предпочтение для заголовка
                 if (preferences && preferences.titlePreference) {
@@ -700,7 +776,7 @@
 
                         // Сохраняем предпочтение, если пользователь отметил чекбокс
                         if (result.remember && domain) {
-                            savePreference(domain, selectedTitleType, preferences?.urlPreference || selectedUrlType);
+                            saveTitlePreference(domain, selectedTitleType);
                         }
                     }
                 } else {
@@ -719,7 +795,7 @@
 
                     // Сохраняем предпочтение, если пользователь отметил чекбокс
                     if (result.remember && domain) {
-                        savePreference(domain, selectedTitleType, preferences?.urlPreference || selectedUrlType);
+                        saveTitlePreference(domain, selectedTitleType);
                     }
                 }
             }
@@ -728,9 +804,11 @@
             metadata.title = selectedTitle;
 
             // Генерируем HTML-ссылку
+            stage = 'генерация HTML';
             const linkHtml = generateLink(selectedUrl, metadata);
 
             // Копируем в буфер обмена как HTML
+            stage = 'копирование в буфер обмена';
             try {
                 // Используем современный Clipboard API для HTML
                 await navigator.clipboard.write([
@@ -753,8 +831,8 @@
             console.log('Copied to clipboard:', linkHtml);
 
         } catch (error) {
-            console.error('Error copying link:', error);
-            showToast('Ошибка при копировании', 'error');
+            console.error(`Error at stage "${stage}":`, error);
+            showToast(`Ошибка на этапе "${stage}": ${error.message}`, 'error');
         }
     }
 
