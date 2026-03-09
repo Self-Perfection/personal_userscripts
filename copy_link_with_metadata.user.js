@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Copy Page Link with Metadata
 // @namespace    http://tampermonkey.net/
-// @version      2.9
+// @version      3.0
 // @description  Copy current page link with title, thumbnail and metadata
 // @author       You
 // @match        *://*/*
@@ -10,6 +10,7 @@
 // @grant        GM_setValue
 // @grant        GM_getValue
 // @downloadURL  https://raw.githubusercontent.com/Self-Perfection/personal_userscripts/refs/heads/main/copy_link_with_metadata.user.js
+// @changelog    3.0 - Исправлено: галочка "Запомнить" сохраняет только выбор из своего диалога, не затрагивая другое поле
 // @changelog    2.9 - Исправлена совместимость с YouTube (CSP Trusted Types): диалог строится через DOM вместо innerHTML; улучшены сообщения об ошибках с указанием этапа
 // @changelog    2.8 - Добавлена возможность запомнить предпочтения выбора URL и заголовка для каждого домена
 // @changelog    2.7 - Улучшено: автоматическое удаление коротких заголовков, если они полностью содержатся в других вариантах
@@ -418,6 +419,28 @@
         }
     }
 
+    // Сохранить только предпочтение URL для домена (не затрагивает titlePreference)
+    function saveUrlPreference(domain, urlPreference) {
+        try {
+            const prefs = loadPreferences();
+            prefs[domain] = Object.assign({}, prefs[domain] || {}, { urlPreference });
+            GM_setValue(PREFERENCES_KEY, JSON.stringify(prefs));
+        } catch (e) {
+            console.error('Failed to save URL preference:', e);
+        }
+    }
+
+    // Сохранить только предпочтение заголовка для домена (не затрагивает urlPreference)
+    function saveTitlePreference(domain, titlePreference) {
+        try {
+            const prefs = loadPreferences();
+            prefs[domain] = Object.assign({}, prefs[domain] || {}, { titlePreference });
+            GM_setValue(PREFERENCES_KEY, JSON.stringify(prefs));
+        } catch (e) {
+            console.error('Failed to save title preference:', e);
+        }
+    }
+
     // Получить предпочтения для домена
     function getPreference(domain) {
         const prefs = loadPreferences();
@@ -653,7 +676,7 @@
 
                         // Сохраняем предпочтение, если пользователь отметил чекбокс
                         if (result.remember && domain) {
-                            savePreference(domain, preferences?.titlePreference || null, selectedUrlType);
+                            saveUrlPreference(domain, selectedUrlType);
                         }
                     }
                 } else {
@@ -672,7 +695,7 @@
 
                     // Сохраняем предпочтение, если пользователь отметил чекбокс
                     if (result.remember && domain) {
-                        savePreference(domain, preferences?.titlePreference || null, selectedUrlType);
+                        saveUrlPreference(domain, selectedUrlType);
                     }
                 }
             }
@@ -753,7 +776,7 @@
 
                         // Сохраняем предпочтение, если пользователь отметил чекбокс
                         if (result.remember && domain) {
-                            savePreference(domain, selectedTitleType, preferences?.urlPreference || selectedUrlType);
+                            saveTitlePreference(domain, selectedTitleType);
                         }
                     }
                 } else {
@@ -772,7 +795,7 @@
 
                     // Сохраняем предпочтение, если пользователь отметил чекбокс
                     if (result.remember && domain) {
-                        savePreference(domain, selectedTitleType, preferences?.urlPreference || selectedUrlType);
+                        saveTitlePreference(domain, selectedTitleType);
                     }
                 }
             }
