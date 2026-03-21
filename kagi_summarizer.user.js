@@ -1,11 +1,12 @@
 // ==UserScript==
 // @name         Kagi Summarizer
 // @namespace    http://tampermonkey.net/
-// @version      1.0
+// @version      1.0.1
 // @description  Open current page summary in Kagi Summarizer
 // @author       You
 // @match        *://*/*
 // @grant        GM_registerMenuCommand
+// @grant        GM_openInTab
 // @downloadURL  https://raw.githubusercontent.com/Self-Perfection/personal_userscripts/refs/heads/main/kagi_summarizer.user.js
 // ==/UserScript==
 
@@ -18,6 +19,6 @@
         url.searchParams.set('summary', 'summary');
         url.searchParams.set('length', 'digest');
         url.searchParams.set('url', location.href);
-        window.open(url.href, '_blank');
+        GM_openInTab(url.href, { active: true });
     });
 })();
