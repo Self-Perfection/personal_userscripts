@@ -1,8 +1,9 @@
 // ==UserScript==
 // @name         Kagi Summarizer
 // @namespace    http://tampermonkey.net/
-// @version      1.0.2
+// @version      1.1
 // @description  Open current page summary in Kagi Summarizer
+// @changelog    1.1 - Несколько пунктов меню для разных длин summary (overview, digest, medium), исправлена работа на мобильных
 // @author       You
 // @match        *://*/*
 // @grant        GM_registerMenuCommand
