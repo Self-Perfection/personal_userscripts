@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Copy Page Link with Metadata
 // @namespace    http://tampermonkey.net/
-// @version      3.0
+// @version      3.0.1
 // @description  Copy current page link with title, thumbnail and metadata
 // @author       You
 // @match        *://*/*
@@ -75,7 +75,7 @@
         // Title - собираем оба варианта
         metadata.documentTitle = document.title || '';
         const ogTitle = document.querySelector('meta[property="og:title"]');
-        metadata.ogTitle = ogTitle ? ogTitle.content : null;
+        metadata.ogTitle = ogTitle ? decodeHtmlEntities(ogTitle.content) : null;
         // По умолчанию используем document.title
         metadata.title = metadata.documentTitle;
 
@@ -181,11 +181,11 @@
             metadata.thumbnail = new URL(metadata.thumbnail, window.location.href).href;
         }
 
-        // Description
+        // Description (декодируем HTML entities — некоторые сайты двойно кодируют их в meta тегах)
         const ogDescription = document.querySelector('meta[property="og:description"]');
         const metaDescription = document.querySelector('meta[name="description"]');
-        let description = ogDescription ? ogDescription.content :
-                          (metaDescription ? metaDescription.content : null);
+        let description = ogDescription ? decodeHtmlEntities(ogDescription.content) :
+                          (metaDescription ? decodeHtmlEntities(metaDescription.content) : null);
 
         // Sanity check: если длина description < 12 символов, считаем его отсутствующим
         if (description && description.length < 12) {
@@ -196,7 +196,7 @@
 
         // Site name
         const ogSiteName = document.querySelector('meta[property="og:site_name"]');
-        metadata.siteName = ogSiteName ? ogSiteName.content : null;
+        metadata.siteName = ogSiteName ? decodeHtmlEntities(ogSiteName.content) : null;
 
         // Author - собираем из разных источников, берем первый найденный
         let author = null;
@@ -204,14 +204,14 @@
         // 1. article:author (Open Graph для статей)
         const articleAuthor = document.querySelector('meta[property="article:author"]');
         if (articleAuthor && articleAuthor.content) {
-            author = articleAuthor.content;
+            author = decodeHtmlEntities(articleAuthor.content);
         }
 
         // 2. author (стандартный meta тег)
         if (!author) {
             const metaAuthor = document.querySelector('meta[name="author"]');
             if (metaAuthor && metaAuthor.content) {
-                author = metaAuthor.content;
+                author = decodeHtmlEntities(metaAuthor.content);
             }
         }
 
@@ -219,7 +219,7 @@
         if (!author) {
             const twitterCreator = document.querySelector('meta[name="twitter:creator"], meta[property="twitter:creator"]');
             if (twitterCreator && twitterCreator.content) {
-                author = twitterCreator.content;
+                author = decodeHtmlEntities(twitterCreator.content);
             }
         }
 
@@ -310,6 +310,14 @@
         const div = document.createElement('div');
         div.textContent = text;
         return div.innerHTML;
+    }
+
+    // Функция для декодирования HTML entities (некоторые сайты двойно кодируют entities в meta тегах)
+    function decodeHtmlEntities(text) {
+        if (!text) return text;
+        const textarea = document.createElement('textarea');
+        textarea.innerHTML = text;
+        return textarea.value;
     }
 
     // Функция для генерации HTML-ссылки
