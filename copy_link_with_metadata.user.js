@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Copy Page Link with Metadata
 // @namespace    http://tampermonkey.net/
-// @version      3.0.1
+// @version      3.0.2
 // @description  Copy current page link with title, thumbnail and metadata
 // @author       You
 // @match        *://*/*
@@ -453,42 +453,36 @@
     // Возвращает: {value: selectedValue, remember: checkboxState} или null при отмене
     function showChoiceDialog(title, options, fieldName = 'choice', showRememberCheckbox = false) {
         return new Promise((resolve) => {
-            // Создаём модальное окно через DOM (без innerHTML — совместимо с CSP Trusted Types)
-            const overlay = document.createElement('div');
-            overlay.style.cssText = `
-                position: fixed;
-                top: 0;
-                left: 0;
-                width: 100%;
-                height: 100%;
-                background: rgba(0,0,0,0.5);
-                z-index: 2147483647;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                pointer-events: auto;
-                touch-action: auto;
-            `;
-
-            const dialog = document.createElement('div');
+            // Используем нативный <dialog> с showModal() — помещает в top layer браузера,
+            // гарантированно поверх всего и изолирован от событий/стилей страницы
+            const dialog = document.createElement('dialog');
             dialog.style.cssText = `
                 background: white;
                 padding: 24px;
                 border-radius: 8px;
+                border: none;
                 box-shadow: 0 4px 20px rgba(0,0,0,0.3);
                 max-width: 600px;
                 width: 90vw;
                 max-height: 90vh;
                 overflow-y: auto;
                 font-family: Arial, sans-serif;
-                pointer-events: auto;
-                touch-action: manipulation;
+                color: #333;
                 -webkit-overflow-scrolling: touch;
             `;
 
+            // Стили для ::backdrop (нельзя задать через style, нужен <style>)
+            const backdropStyle = document.createElement('style');
+            backdropStyle.textContent = `
+                dialog[open]::backdrop {
+                    background: rgba(0,0,0,0.5);
+                }
+            `;
+            document.head.appendChild(backdropStyle);
+
             // Заголовок диалога
             const h3 = document.createElement('h3');
-            h3.style.marginTop = '0';
+            h3.style.cssText = 'margin-top: 0; color: #333;';
             h3.textContent = title;
             dialog.appendChild(h3);
 
@@ -498,7 +492,7 @@
 
             options.forEach((opt, idx) => {
                 const label = document.createElement('label');
-                label.style.cssText = 'display: block; margin-bottom: 12px; cursor: pointer; pointer-events: auto;';
+                label.style.cssText = 'display: block; margin-bottom: 12px; cursor: pointer;';
 
                 const input = document.createElement('input');
                 input.type = 'radio';
@@ -543,7 +537,7 @@
                 rememberCheckbox.style.cssText = 'margin-right: 8px; appearance: auto; -webkit-appearance: checkbox; -moz-appearance: checkbox; width: auto; height: auto; cursor: pointer;';
 
                 const rememberText = document.createElement('span');
-                rememberText.style.color = '#666';
+                rememberText.style.cssText = 'color: #666;';
                 rememberText.textContent = 'Запомнить выбор для этого домена';
 
                 rememberLabel.appendChild(rememberCheckbox);
@@ -558,52 +552,56 @@
 
             const cancelBtn = document.createElement('button');
             cancelBtn.textContent = 'Отмена';
-            cancelBtn.style.cssText = 'padding: 8px 16px; margin-right: 8px; border: 1px solid #ddd; background: white; color: #333; border-radius: 4px; cursor: pointer; pointer-events: auto; touch-action: manipulation;';
+            cancelBtn.style.cssText = 'padding: 8px 16px; margin-right: 8px; border: 1px solid #ddd; background: white; color: #333; border-radius: 4px; cursor: pointer;';
 
             const confirmBtn = document.createElement('button');
             confirmBtn.textContent = 'Выбрать';
-            confirmBtn.style.cssText = 'padding: 8px 16px; background: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer; pointer-events: auto; touch-action: manipulation;';
+            confirmBtn.style.cssText = 'padding: 8px 16px; background: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer;';
 
             buttonsDiv.appendChild(cancelBtn);
             buttonsDiv.appendChild(confirmBtn);
             dialog.appendChild(buttonsDiv);
 
-            overlay.appendChild(dialog);
-            document.body.appendChild(overlay);
+            document.body.appendChild(dialog);
+            dialog.showModal();
 
-            // Блокируем всплытие событий на overlay, чтобы скрипты страницы не перехватывали клики
-            overlay.addEventListener('click', (e) => e.stopPropagation(), true);
-            overlay.addEventListener('touchstart', (e) => e.stopPropagation(), true);
-            overlay.addEventListener('touchend', (e) => e.stopPropagation(), true);
-            overlay.addEventListener('pointerdown', (e) => e.stopPropagation(), true);
-            overlay.addEventListener('pointerup', (e) => e.stopPropagation(), true);
+            function cleanup() {
+                dialog.close();
+                dialog.remove();
+                backdropStyle.remove();
+            }
 
             // Обработчики кнопок
-            confirmBtn.onclick = () => {
+            confirmBtn.addEventListener('click', () => {
                 const selected = dialog.querySelector(`input[name="${fieldName}"]:checked`);
                 const selectedIdx = parseInt(selected.value);
                 const remember = rememberCheckbox ? rememberCheckbox.checked : false;
-                document.body.removeChild(overlay);
+                cleanup();
                 resolve({
                     value: options[selectedIdx].value,
                     remember: remember
                 });
-            };
+            });
 
-            cancelBtn.onclick = () => {
-                document.body.removeChild(overlay);
+            cancelBtn.addEventListener('click', () => {
+                cleanup();
                 resolve(null);
-            };
+            });
 
-            // ESC для закрытия
-            const escHandler = (e) => {
-                if (e.key === 'Escape') {
-                    document.body.removeChild(overlay);
-                    document.removeEventListener('keydown', escHandler);
+            // Нативное событие cancel (ESC) — <dialog> обрабатывает автоматически
+            dialog.addEventListener('cancel', (e) => {
+                e.preventDefault();
+                cleanup();
+                resolve(null);
+            });
+
+            // Клик по backdrop (за пределами диалога) — закрытие
+            dialog.addEventListener('click', (e) => {
+                if (e.target === dialog) {
+                    cleanup();
                     resolve(null);
                 }
-            };
-            document.addEventListener('keydown', escHandler);
+            });
         });
     }
 
