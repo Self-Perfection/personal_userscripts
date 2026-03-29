@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Copy Page Link with Metadata
 // @namespace    http://tampermonkey.net/
-// @version      3.0
+// @version      3.1
 // @description  Copy current page link with title, thumbnail and metadata
 // @author       You
 // @match        *://*/*
@@ -10,6 +10,7 @@
 // @grant        GM_setValue
 // @grant        GM_getValue
 // @downloadURL  https://raw.githubusercontent.com/Self-Perfection/personal_userscripts/refs/heads/main/copy_link_with_metadata.user.js
+// @changelog    3.1 - Исправлено: диалог выбора не реагировал на клики на сайтах с агрессивным CSS (Wired.com и др.) — переход на <dialog> + Shadow DOM
 // @changelog    3.0 - Исправлено: галочка "Запомнить" сохраняет только выбор из своего диалога, не затрагивая другое поле
 // @changelog    2.9 - Исправлена совместимость с YouTube (CSP Trusted Types): диалог строится через DOM вместо innerHTML; улучшены сообщения об ошибках с указанием этапа
 // @changelog    2.8 - Добавлена возможность запомнить предпочтения выбора URL и заголовка для каждого домена
@@ -453,63 +454,111 @@
     // Возвращает: {value: selectedValue, remember: checkboxState} или null при отмене
     function showChoiceDialog(title, options, fieldName = 'choice', showRememberCheckbox = false) {
         return new Promise((resolve) => {
-            // Создаём модальное окно через DOM (без innerHTML — совместимо с CSP Trusted Types)
-            const overlay = document.createElement('div');
-            overlay.style.cssText = `
-                position: fixed;
-                top: 0;
-                left: 0;
-                width: 100%;
-                height: 100%;
-                background: rgba(0,0,0,0.5);
-                z-index: 9999;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-            `;
+            // <dialog> в основном DOM — top layer для позиционирования
+            // Shadow DOM внутри — полная изоляция стилей от страницы
+            const dialog = document.createElement('dialog');
+            dialog.style.cssText = 'background: transparent; border: none; padding: 0; max-width: 600px; width: 90vw; max-height: 90vh; overflow: visible;';
 
-            const dialog = document.createElement('div');
-            dialog.style.cssText = `
-                background: white;
-                padding: 24px;
-                border-radius: 8px;
-                box-shadow: 0 4px 20px rgba(0,0,0,0.3);
-                max-width: 600px;
-                font-family: Arial, sans-serif;
-            `;
+            // Стили для ::backdrop
+            const backdropStyle = document.createElement('style');
+            backdropStyle.textContent = 'dialog[open]::backdrop { background: rgba(0,0,0,0.5); }';
+            document.head.appendChild(backdropStyle);
 
-            // Заголовок диалога
+            // Shadow DOM для изоляции содержимого от стилей страницы
+            const shadowHost = document.createElement('div');
+            dialog.appendChild(shadowHost);
+            const shadow = shadowHost.attachShadow({ mode: 'open' });
+
+            // Все стили внутри Shadow DOM
+            const style = document.createElement('style');
+            style.textContent = `
+                :host { display: block; }
+                * { box-sizing: border-box; }
+                .dialog-content {
+                    background: white;
+                    padding: 24px;
+                    border-radius: 8px;
+                    box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+                    font-family: Arial, sans-serif;
+                    color: #333;
+                    max-height: 90vh;
+                    overflow-y: auto;
+                    -webkit-overflow-scrolling: touch;
+                }
+                h3 { margin-top: 0; color: #333; }
+                .options { margin: 16px 0; }
+                label.option { display: block; margin-bottom: 12px; cursor: pointer; }
+                input[type="radio"] {
+                    margin-right: 8px;
+                    width: 16px;
+                    height: 16px;
+                    cursor: pointer;
+                    vertical-align: middle;
+                }
+                .source { color: #999; font-weight: normal; }
+                .value { display: block; margin-left: 24px; word-break: break-all; color: #666; }
+                .remember { margin: 16px 0; padding-top: 12px; border-top: 1px solid #eee; }
+                label.remember-label { cursor: pointer; display: inline-flex; align-items: center; }
+                input[type="checkbox"] {
+                    margin-right: 8px;
+                    width: 16px;
+                    height: 16px;
+                    cursor: pointer;
+                }
+                .remember-text { color: #666; }
+                .buttons { text-align: right; }
+                button {
+                    padding: 8px 16px;
+                    border-radius: 4px;
+                    cursor: pointer;
+                    font-size: 14px;
+                }
+                button.cancel {
+                    margin-right: 8px;
+                    border: 1px solid #ddd;
+                    background: white;
+                    color: #333;
+                }
+                button.confirm {
+                    background: #4CAF50;
+                    color: white;
+                    border: none;
+                }
+            `;
+            shadow.appendChild(style);
+
+            // Содержимое диалога
+            const content = document.createElement('div');
+            content.className = 'dialog-content';
+
             const h3 = document.createElement('h3');
-            h3.style.marginTop = '0';
             h3.textContent = title;
-            dialog.appendChild(h3);
+            content.appendChild(h3);
 
-            // Контейнер с опциями
             const optionsDiv = document.createElement('div');
-            optionsDiv.style.margin = '16px 0';
+            optionsDiv.className = 'options';
 
             options.forEach((opt, idx) => {
                 const label = document.createElement('label');
-                label.style.cssText = 'display: block; margin-bottom: 12px; cursor: pointer;';
+                label.className = 'option';
 
                 const input = document.createElement('input');
                 input.type = 'radio';
                 input.name = fieldName;
                 input.value = String(idx);
                 input.checked = opt.checked || false;
-                input.style.cssText = 'margin-right: 8px; appearance: auto; -webkit-appearance: radio; -moz-appearance: radio; width: auto; height: auto; padding: 0; border: none; border-radius: 0; cursor: pointer;';
 
                 const strong = document.createElement('strong');
                 strong.textContent = opt.label;
                 if (opt.source) {
                     const sourceSpan = document.createElement('span');
-                    sourceSpan.style.cssText = 'color: #999; font-weight: normal;';
+                    sourceSpan.className = 'source';
                     sourceSpan.textContent = ` (${opt.source})`;
                     strong.appendChild(sourceSpan);
                 }
 
                 const valueSpan = document.createElement('span');
-                valueSpan.style.cssText = 'display: block; margin-left: 24px; word-break: break-all; color: #666;';
+                valueSpan.className = 'value';
                 valueSpan.textContent = opt.value;
 
                 label.appendChild(input);
@@ -519,76 +568,86 @@
                 optionsDiv.appendChild(label);
             });
 
-            dialog.appendChild(optionsDiv);
+            content.appendChild(optionsDiv);
 
-            // Чекбокс "Запомнить" (если нужен)
+            // Чекбокс "Запомнить"
             let rememberCheckbox = null;
             if (showRememberCheckbox) {
                 const rememberDiv = document.createElement('div');
-                rememberDiv.style.cssText = 'margin: 16px 0; padding-top: 12px; border-top: 1px solid #eee;';
+                rememberDiv.className = 'remember';
 
                 const rememberLabel = document.createElement('label');
-                rememberLabel.style.cssText = 'cursor: pointer; display: inline-flex; align-items: center;';
+                rememberLabel.className = 'remember-label';
 
                 rememberCheckbox = document.createElement('input');
                 rememberCheckbox.type = 'checkbox';
-                rememberCheckbox.style.cssText = 'margin-right: 8px; appearance: auto; -webkit-appearance: checkbox; -moz-appearance: checkbox; width: auto; height: auto; cursor: pointer;';
 
                 const rememberText = document.createElement('span');
-                rememberText.style.color = '#666';
+                rememberText.className = 'remember-text';
                 rememberText.textContent = 'Запомнить выбор для этого домена';
 
                 rememberLabel.appendChild(rememberCheckbox);
                 rememberLabel.appendChild(rememberText);
                 rememberDiv.appendChild(rememberLabel);
-                dialog.appendChild(rememberDiv);
+                content.appendChild(rememberDiv);
             }
 
             // Кнопки
             const buttonsDiv = document.createElement('div');
-            buttonsDiv.style.textAlign = 'right';
+            buttonsDiv.className = 'buttons';
 
             const cancelBtn = document.createElement('button');
+            cancelBtn.className = 'cancel';
             cancelBtn.textContent = 'Отмена';
-            cancelBtn.style.cssText = 'padding: 8px 16px; margin-right: 8px; border: 1px solid #ddd; background: white; color: #333; border-radius: 4px; cursor: pointer;';
 
             const confirmBtn = document.createElement('button');
+            confirmBtn.className = 'confirm';
             confirmBtn.textContent = 'Выбрать';
-            confirmBtn.style.cssText = 'padding: 8px 16px; background: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer;';
 
             buttonsDiv.appendChild(cancelBtn);
             buttonsDiv.appendChild(confirmBtn);
-            dialog.appendChild(buttonsDiv);
+            content.appendChild(buttonsDiv);
 
-            overlay.appendChild(dialog);
-            document.body.appendChild(overlay);
+            shadow.appendChild(content);
 
-            // Обработчики кнопок
-            confirmBtn.onclick = () => {
-                const selected = dialog.querySelector(`input[name="${fieldName}"]:checked`);
+            document.body.appendChild(dialog);
+            dialog.showModal();
+
+            function cleanup() {
+                dialog.close();
+                dialog.remove();
+                backdropStyle.remove();
+            }
+
+            confirmBtn.addEventListener('click', () => {
+                const selected = shadow.querySelector(`input[name="${fieldName}"]:checked`);
                 const selectedIdx = parseInt(selected.value);
                 const remember = rememberCheckbox ? rememberCheckbox.checked : false;
-                document.body.removeChild(overlay);
+                cleanup();
                 resolve({
                     value: options[selectedIdx].value,
                     remember: remember
                 });
-            };
+            });
 
-            cancelBtn.onclick = () => {
-                document.body.removeChild(overlay);
+            cancelBtn.addEventListener('click', () => {
+                cleanup();
                 resolve(null);
-            };
+            });
 
-            // ESC для закрытия
-            const escHandler = (e) => {
-                if (e.key === 'Escape') {
-                    document.body.removeChild(overlay);
-                    document.removeEventListener('keydown', escHandler);
+            dialog.addEventListener('cancel', (e) => {
+                e.preventDefault();
+                cleanup();
+                resolve(null);
+            });
+
+            // Клик по backdrop — закрытие
+            dialog.addEventListener('click', (e) => {
+                if (e.target === dialog) {
+                    cleanup();
                     resolve(null);
                 }
-            };
-            document.addEventListener('keydown', escHandler);
+            });
         });
     }
 
