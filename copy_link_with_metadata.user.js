@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Copy Page Link with Metadata
 // @namespace    http://tampermonkey.net/
-// @version      3.0.2
+// @version      3.0.3
 // @description  Copy current page link with title, thumbnail and metadata
 // @author       You
 // @match        *://*/*
@@ -453,65 +453,111 @@
     // Возвращает: {value: selectedValue, remember: checkboxState} или null при отмене
     function showChoiceDialog(title, options, fieldName = 'choice', showRememberCheckbox = false) {
         return new Promise((resolve) => {
-            // Используем нативный <dialog> с showModal() — помещает в top layer браузера,
-            // гарантированно поверх всего и изолирован от событий/стилей страницы
+            // <dialog> в основном DOM — top layer для позиционирования
+            // Shadow DOM внутри — полная изоляция стилей от страницы
             const dialog = document.createElement('dialog');
-            dialog.style.cssText = `
-                background: white;
-                padding: 24px;
-                border-radius: 8px;
-                border: none;
-                box-shadow: 0 4px 20px rgba(0,0,0,0.3);
-                max-width: 600px;
-                width: 90vw;
-                max-height: 90vh;
-                overflow-y: auto;
-                font-family: Arial, sans-serif;
-                color: #333;
-                -webkit-overflow-scrolling: touch;
-            `;
+            dialog.style.cssText = 'background: transparent; border: none; padding: 0; max-width: 600px; width: 90vw; max-height: 90vh; overflow: visible;';
 
-            // Стили для ::backdrop (нельзя задать через style, нужен <style>)
+            // Стили для ::backdrop
             const backdropStyle = document.createElement('style');
-            backdropStyle.textContent = `
-                dialog[open]::backdrop {
-                    background: rgba(0,0,0,0.5);
-                }
-            `;
+            backdropStyle.textContent = 'dialog[open]::backdrop { background: rgba(0,0,0,0.5); }';
             document.head.appendChild(backdropStyle);
 
-            // Заголовок диалога
-            const h3 = document.createElement('h3');
-            h3.style.cssText = 'margin-top: 0; color: #333;';
-            h3.textContent = title;
-            dialog.appendChild(h3);
+            // Shadow DOM для изоляции содержимого от стилей страницы
+            const shadowHost = document.createElement('div');
+            dialog.appendChild(shadowHost);
+            const shadow = shadowHost.attachShadow({ mode: 'open' });
 
-            // Контейнер с опциями
+            // Все стили внутри Shadow DOM
+            const style = document.createElement('style');
+            style.textContent = `
+                :host { display: block; }
+                * { box-sizing: border-box; }
+                .dialog-content {
+                    background: white;
+                    padding: 24px;
+                    border-radius: 8px;
+                    box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+                    font-family: Arial, sans-serif;
+                    color: #333;
+                    max-height: 90vh;
+                    overflow-y: auto;
+                    -webkit-overflow-scrolling: touch;
+                }
+                h3 { margin-top: 0; color: #333; }
+                .options { margin: 16px 0; }
+                label.option { display: block; margin-bottom: 12px; cursor: pointer; }
+                input[type="radio"] {
+                    margin-right: 8px;
+                    width: 16px;
+                    height: 16px;
+                    cursor: pointer;
+                    vertical-align: middle;
+                }
+                .source { color: #999; font-weight: normal; }
+                .value { display: block; margin-left: 24px; word-break: break-all; color: #666; }
+                .remember { margin: 16px 0; padding-top: 12px; border-top: 1px solid #eee; }
+                label.remember-label { cursor: pointer; display: inline-flex; align-items: center; }
+                input[type="checkbox"] {
+                    margin-right: 8px;
+                    width: 16px;
+                    height: 16px;
+                    cursor: pointer;
+                }
+                .remember-text { color: #666; }
+                .buttons { text-align: right; }
+                button {
+                    padding: 8px 16px;
+                    border-radius: 4px;
+                    cursor: pointer;
+                    font-size: 14px;
+                }
+                button.cancel {
+                    margin-right: 8px;
+                    border: 1px solid #ddd;
+                    background: white;
+                    color: #333;
+                }
+                button.confirm {
+                    background: #4CAF50;
+                    color: white;
+                    border: none;
+                }
+            `;
+            shadow.appendChild(style);
+
+            // Содержимое диалога
+            const content = document.createElement('div');
+            content.className = 'dialog-content';
+
+            const h3 = document.createElement('h3');
+            h3.textContent = title;
+            content.appendChild(h3);
+
             const optionsDiv = document.createElement('div');
-            optionsDiv.style.margin = '16px 0';
+            optionsDiv.className = 'options';
 
             options.forEach((opt, idx) => {
                 const label = document.createElement('label');
-                label.style.cssText = 'display: block; margin-bottom: 12px; cursor: pointer;';
+                label.className = 'option';
 
                 const input = document.createElement('input');
                 input.type = 'radio';
                 input.name = fieldName;
                 input.value = String(idx);
                 input.checked = opt.checked || false;
-                input.style.cssText = 'margin-right: 8px; appearance: auto; -webkit-appearance: radio; -moz-appearance: radio; width: auto; height: auto; padding: 0; border: none; border-radius: 0; cursor: pointer;';
 
                 const strong = document.createElement('strong');
                 strong.textContent = opt.label;
                 if (opt.source) {
                     const sourceSpan = document.createElement('span');
-                    sourceSpan.style.cssText = 'color: #999; font-weight: normal;';
+                    sourceSpan.className = 'source';
                     sourceSpan.textContent = ` (${opt.source})`;
                     strong.appendChild(sourceSpan);
                 }
 
                 const valueSpan = document.createElement('span');
-                valueSpan.style.cssText = 'display: block; margin-left: 24px; word-break: break-all; color: #666;';
+                valueSpan.className = 'value';
                 valueSpan.textContent = opt.value;
 
                 label.appendChild(input);
@@ -521,46 +567,47 @@
                 optionsDiv.appendChild(label);
             });
 
-            dialog.appendChild(optionsDiv);
+            content.appendChild(optionsDiv);
 
-            // Чекбокс "Запомнить" (если нужен)
+            // Чекбокс "Запомнить"
             let rememberCheckbox = null;
             if (showRememberCheckbox) {
                 const rememberDiv = document.createElement('div');
-                rememberDiv.style.cssText = 'margin: 16px 0; padding-top: 12px; border-top: 1px solid #eee;';
+                rememberDiv.className = 'remember';
 
                 const rememberLabel = document.createElement('label');
-                rememberLabel.style.cssText = 'cursor: pointer; display: inline-flex; align-items: center;';
+                rememberLabel.className = 'remember-label';
 
                 rememberCheckbox = document.createElement('input');
                 rememberCheckbox.type = 'checkbox';
-                rememberCheckbox.style.cssText = 'margin-right: 8px; appearance: auto; -webkit-appearance: checkbox; -moz-appearance: checkbox; width: auto; height: auto; cursor: pointer;';
 
                 const rememberText = document.createElement('span');
-                rememberText.style.cssText = 'color: #666;';
+                rememberText.className = 'remember-text';
                 rememberText.textContent = 'Запомнить выбор для этого домена';
 
                 rememberLabel.appendChild(rememberCheckbox);
                 rememberLabel.appendChild(rememberText);
                 rememberDiv.appendChild(rememberLabel);
-                dialog.appendChild(rememberDiv);
+                content.appendChild(rememberDiv);
             }
 
             // Кнопки
             const buttonsDiv = document.createElement('div');
-            buttonsDiv.style.textAlign = 'right';
+            buttonsDiv.className = 'buttons';
 
             const cancelBtn = document.createElement('button');
+            cancelBtn.className = 'cancel';
             cancelBtn.textContent = 'Отмена';
-            cancelBtn.style.cssText = 'padding: 8px 16px; margin-right: 8px; border: 1px solid #ddd; background: white; color: #333; border-radius: 4px; cursor: pointer;';
 
             const confirmBtn = document.createElement('button');
+            confirmBtn.className = 'confirm';
             confirmBtn.textContent = 'Выбрать';
-            confirmBtn.style.cssText = 'padding: 8px 16px; background: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer;';
 
             buttonsDiv.appendChild(cancelBtn);
             buttonsDiv.appendChild(confirmBtn);
-            dialog.appendChild(buttonsDiv);
+            content.appendChild(buttonsDiv);
+
+            shadow.appendChild(content);
 
             document.body.appendChild(dialog);
             dialog.showModal();
@@ -571,9 +618,8 @@
                 backdropStyle.remove();
             }
 
-            // Обработчики кнопок
             confirmBtn.addEventListener('click', () => {
-                const selected = dialog.querySelector(`input[name="${fieldName}"]:checked`);
+                const selected = shadow.querySelector(`input[name="${fieldName}"]:checked`);
                 const selectedIdx = parseInt(selected.value);
                 const remember = rememberCheckbox ? rememberCheckbox.checked : false;
                 cleanup();
@@ -588,14 +634,13 @@
                 resolve(null);
             });
 
-            // Нативное событие cancel (ESC) — <dialog> обрабатывает автоматически
             dialog.addEventListener('cancel', (e) => {
                 e.preventDefault();
                 cleanup();
                 resolve(null);
             });
 
-            // Клик по backdrop (за пределами диалога) — закрытие
+            // Клик по backdrop — закрытие
             dialog.addEventListener('click', (e) => {
                 if (e.target === dialog) {
                     cleanup();
