@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Copy Page Link with Metadata
 // @namespace    http://tampermonkey.net/
-// @version      3.0
+// @version      3.0.1
 // @description  Copy current page link with title, thumbnail and metadata
 // @author       You
 // @match        *://*/*
@@ -462,10 +462,12 @@
                 width: 100%;
                 height: 100%;
                 background: rgba(0,0,0,0.5);
-                z-index: 9999;
+                z-index: 2147483647;
                 display: flex;
                 align-items: center;
                 justify-content: center;
+                pointer-events: auto;
+                touch-action: auto;
             `;
 
             const dialog = document.createElement('div');
@@ -475,7 +477,13 @@
                 border-radius: 8px;
                 box-shadow: 0 4px 20px rgba(0,0,0,0.3);
                 max-width: 600px;
+                width: 90vw;
+                max-height: 90vh;
+                overflow-y: auto;
                 font-family: Arial, sans-serif;
+                pointer-events: auto;
+                touch-action: manipulation;
+                -webkit-overflow-scrolling: touch;
             `;
 
             // Заголовок диалога
@@ -490,7 +498,7 @@
 
             options.forEach((opt, idx) => {
                 const label = document.createElement('label');
-                label.style.cssText = 'display: block; margin-bottom: 12px; cursor: pointer;';
+                label.style.cssText = 'display: block; margin-bottom: 12px; cursor: pointer; pointer-events: auto;';
 
                 const input = document.createElement('input');
                 input.type = 'radio';
@@ -550,11 +558,11 @@
 
             const cancelBtn = document.createElement('button');
             cancelBtn.textContent = 'Отмена';
-            cancelBtn.style.cssText = 'padding: 8px 16px; margin-right: 8px; border: 1px solid #ddd; background: white; color: #333; border-radius: 4px; cursor: pointer;';
+            cancelBtn.style.cssText = 'padding: 8px 16px; margin-right: 8px; border: 1px solid #ddd; background: white; color: #333; border-radius: 4px; cursor: pointer; pointer-events: auto; touch-action: manipulation;';
 
             const confirmBtn = document.createElement('button');
             confirmBtn.textContent = 'Выбрать';
-            confirmBtn.style.cssText = 'padding: 8px 16px; background: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer;';
+            confirmBtn.style.cssText = 'padding: 8px 16px; background: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer; pointer-events: auto; touch-action: manipulation;';
 
             buttonsDiv.appendChild(cancelBtn);
             buttonsDiv.appendChild(confirmBtn);
@@ -562,6 +570,13 @@
 
             overlay.appendChild(dialog);
             document.body.appendChild(overlay);
+
+            // Блокируем всплытие событий на overlay, чтобы скрипты страницы не перехватывали клики
+            overlay.addEventListener('click', (e) => e.stopPropagation(), true);
+            overlay.addEventListener('touchstart', (e) => e.stopPropagation(), true);
+            overlay.addEventListener('touchend', (e) => e.stopPropagation(), true);
+            overlay.addEventListener('pointerdown', (e) => e.stopPropagation(), true);
+            overlay.addEventListener('pointerup', (e) => e.stopPropagation(), true);
 
             // Обработчики кнопок
             confirmBtn.onclick = () => {
