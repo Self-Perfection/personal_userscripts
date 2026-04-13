@@ -1,8 +1,9 @@
 // ==UserScript==
 // @name         Kagi Summarizer
 // @namespace    http://tampermonkey.net/
-// @version      1.1.1
+// @version      1.2
 // @description  Open current page summary in Kagi Summarizer
+// @changelog    1.2 - Добавлен fallback через window.open при неработающем GM_openInTab (Android Firefox)
 // @changelog    1.1 - Несколько пунктов меню для разных длин summary (overview, digest, medium), исправлена работа на мобильных
 // @author       You
 // @match        *://*/*
