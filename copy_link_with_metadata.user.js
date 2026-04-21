@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Copy Page Link with Metadata
 // @namespace    http://tampermonkey.net/
-// @version      3.1.2
+// @version      3.2
 // @description  Copy current page link with title, thumbnail and metadata
 // @author       You
 // @match        *://*/*
@@ -10,6 +10,7 @@
 // @grant        GM_setValue
 // @grant        GM_getValue
 // @downloadURL  https://raw.githubusercontent.com/Self-Perfection/personal_userscripts/refs/heads/main/copy_link_with_metadata.user.js
+// @changelog    3.2 - Настройки каждого домена хранятся в отдельном ключе domainPrefs_<домен> для удобного редактирования в Violentmonkey
 // @changelog    3.1 - Исправлено: диалог выбора не реагировал на клики на сайтах с агрессивным CSS (Wired.com и др.) — переход на <dialog> + Shadow DOM
 // @changelog    3.0 - Исправлено: галочка "Запомнить" сохраняет только выбор из своего диалога, не затрагивая другое поле
 // @changelog    2.9 - Исправлена совместимость с YouTube (CSP Trusted Types): диалог строится через DOM вместо innerHTML; улучшены сообщения об ошибках с указанием этапа
