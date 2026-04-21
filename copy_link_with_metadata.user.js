@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Copy Page Link with Metadata
 // @namespace    http://tampermonkey.net/
-// @version      3.1.1
+// @version      3.1.2
 // @description  Copy current page link with title, thumbnail and metadata
 // @author       You
 // @match        *://*/*
@@ -382,7 +382,7 @@
     }
 
     // Функции для работы с предпочтениями доменов
-    const DOMAIN_PREFS_PREFIX = 'domainPreferences_';
+    const DOMAIN_PREFS_PREFIX = 'domainPrefs_';
 
     // Получить домен из URL
     function getDomainFromUrl(url) {
