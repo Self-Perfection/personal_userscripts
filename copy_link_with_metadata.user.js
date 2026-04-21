@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Copy Page Link with Metadata
 // @namespace    http://tampermonkey.net/
-// @version      3.1
+// @version      3.2
 // @description  Copy current page link with title, thumbnail and metadata
 // @author       You
 // @match        *://*/*
@@ -10,6 +10,7 @@
 // @grant        GM_setValue
 // @grant        GM_getValue
 // @downloadURL  https://raw.githubusercontent.com/Self-Perfection/personal_userscripts/refs/heads/main/copy_link_with_metadata.user.js
+// @changelog    3.2 - Настройки каждого домена хранятся в отдельном ключе domainPrefs_<домен> для удобного редактирования в Violentmonkey
 // @changelog    3.1 - Исправлено: диалог выбора не реагировал на клики на сайтах с агрессивным CSS (Wired.com и др.) — переход на <dialog> + Shadow DOM
 // @changelog    3.0 - Исправлено: галочка "Запомнить" сохраняет только выбор из своего диалога, не затрагивая другое поле
 // @changelog    2.9 - Исправлена совместимость с YouTube (CSP Trusted Types): диалог строится через DOM вместо innerHTML; улучшены сообщения об ошибках с указанием этапа
@@ -382,7 +383,7 @@
     }
 
     // Функции для работы с предпочтениями доменов
-    const PREFERENCES_KEY = 'domainPreferences';
+    const DOMAIN_PREFS_PREFIX = 'domainPrefs_';
 
     // Получить домен из URL
     function getDomainFromUrl(url) {
@@ -395,26 +396,10 @@
         }
     }
 
-    // Загрузить все предпочтения
-    function loadPreferences() {
-        try {
-            const stored = GM_getValue(PREFERENCES_KEY, '{}');
-            return JSON.parse(stored);
-        } catch (e) {
-            console.warn('Failed to load preferences:', e);
-            return {};
-        }
-    }
-
     // Сохранить предпочтения для домена
     function savePreference(domain, titlePreference, urlPreference) {
         try {
-            const prefs = loadPreferences();
-            prefs[domain] = {
-                titlePreference: titlePreference,
-                urlPreference: urlPreference
-            };
-            GM_setValue(PREFERENCES_KEY, JSON.stringify(prefs));
+            GM_setValue(DOMAIN_PREFS_PREFIX + domain, { titlePreference, urlPreference });
         } catch (e) {
             console.error('Failed to save preferences:', e);
         }
@@ -423,9 +408,8 @@
     // Сохранить только предпочтение URL для домена (не затрагивает titlePreference)
     function saveUrlPreference(domain, urlPreference) {
         try {
-            const prefs = loadPreferences();
-            prefs[domain] = Object.assign({}, prefs[domain] || {}, { urlPreference });
-            GM_setValue(PREFERENCES_KEY, JSON.stringify(prefs));
+            const current = GM_getValue(DOMAIN_PREFS_PREFIX + domain, {});
+            GM_setValue(DOMAIN_PREFS_PREFIX + domain, Object.assign({}, current, { urlPreference }));
         } catch (e) {
             console.error('Failed to save URL preference:', e);
         }
@@ -434,9 +418,8 @@
     // Сохранить только предпочтение заголовка для домена (не затрагивает urlPreference)
     function saveTitlePreference(domain, titlePreference) {
         try {
-            const prefs = loadPreferences();
-            prefs[domain] = Object.assign({}, prefs[domain] || {}, { titlePreference });
-            GM_setValue(PREFERENCES_KEY, JSON.stringify(prefs));
+            const current = GM_getValue(DOMAIN_PREFS_PREFIX + domain, {});
+            GM_setValue(DOMAIN_PREFS_PREFIX + domain, Object.assign({}, current, { titlePreference }));
         } catch (e) {
             console.error('Failed to save title preference:', e);
         }
@@ -444,8 +427,8 @@
 
     // Получить предпочтения для домена
     function getPreference(domain) {
-        const prefs = loadPreferences();
-        return prefs[domain] || null;
+        if (!domain) return null;
+        return GM_getValue(DOMAIN_PREFS_PREFIX + domain, null);
     }
 
     // Универсальная функция для показа диалога выбора
