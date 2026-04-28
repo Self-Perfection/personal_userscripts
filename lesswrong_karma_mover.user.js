@@ -1,9 +1,10 @@
 // ==UserScript==
 // @name         LessWrong Karma Mover
 // @namespace    https://github.com/Self-Perfection/gov.pt_enhancement_userscripts
-// @version      1.0.4
+// @version      1.1
 // @icon         https://res.cloudinary.com/lesswrong-2-0/image/upload/v1497915096/favicon_lncumn.ico
 // @description  Moves karma and agreement scores from the top of LessWrong / Alignment Forum comments to the bottom to reduce anchoring bias.
+// @changelog    1.1 - Первый релиз: перемещение виджета кармы вниз, настройки через диалог (режим read-only karma)
 // @author       Self-Perfection
 // @match        https://www.lesswrong.com/*
 // @match        https://www.alignmentforum.org/*
