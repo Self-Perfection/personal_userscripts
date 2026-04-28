@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         LessWrong Karma Mover
 // @namespace    https://github.com/Self-Perfection/gov.pt_enhancement_userscripts
-// @version      1.0.2
+// @version      1.0.3
 // @icon         https://res.cloudinary.com/lesswrong-2-0/image/upload/v1497915096/favicon_lncumn.ico
 // @description  Moves karma and agreement scores from the top of LessWrong / Alignment Forum comments to the bottom to reduce anchoring bias.
 // @author       Self-Perfection
@@ -12,8 +12,8 @@
 // @grant        GM_registerMenuCommand
 // @grant        GM_addStyle
 // @run-at       document-idle
-// @downloadURL  https://raw.githubusercontent.com/Self-Perfection/gov.pt_enhancement_userscripts/refs/heads/main/lesswrong_karma_mover.user.js
-// @updateURL    https://raw.githubusercontent.com/Self-Perfection/gov.pt_enhancement_userscripts/refs/heads/main/lesswrong_karma_mover.user.js
+// @downloadURL  https://raw.githubusercontent.com/Self-Perfection/personal_userscripts/refs/heads/main/lesswrong_karma_mover.user.js
+// @updateURL    https://raw.githubusercontent.com/Self-Perfection/personal_userscripts/refs/heads/main/lesswrong_karma_mover.user.js
 // ==/UserScript==
 
 (async function () {
