@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Copy Page Link with Metadata
 // @namespace    http://tampermonkey.net/
-// @version      3.2
+// @version      3.3
 // @description  Copy current page link with title, thumbnail and metadata
 // @author       You
 // @match        *://*/*
@@ -10,6 +10,7 @@
 // @grant        GM_setValue
 // @grant        GM_getValue
 // @downloadURL  https://raw.githubusercontent.com/Self-Perfection/personal_userscripts/refs/heads/main/copy_link_with_metadata.user.js
+// @changelog    3.3 - Если бренд (og:site_name) есть в заголовке, автоматически выбирается вариант с брендом в конце, без диалога
 // @changelog    3.2 - Настройки каждого домена хранятся в отдельном ключе domainPrefs_<домен> для удобного редактирования в Violentmonkey
 // @changelog    3.1 - Исправлено: диалог выбора не реагировал на клики на сайтах с агрессивным CSS (Wired.com и др.) — переход на <dialog> + Shadow DOM
 // @changelog    3.0 - Исправлено: галочка "Запомнить" сохраняет только выбор из своего диалога, не затрагивая другое поле
@@ -285,6 +286,31 @@
             .replace(/[\r\n]+/g, ' ')  // Заменяем переносы строк на пробелы
             .replace(/\s+/g, ' ')       // Заменяем множественные пробелы на одинарные
             .trim();                     // Убираем пробелы в начале и конце
+    }
+
+    // Функция для определения позиции siteName в заголовке
+    // Возвращает: 'end' | 'start' | 'middle' | 'none'
+    function getSiteNamePosition(title, siteName) {
+        if (!title || !siteName) return 'none';
+
+        const normalizedTitle = title.toLowerCase().trim();
+        const normalizedSiteName = siteName.toLowerCase().trim();
+
+        const idx = normalizedTitle.indexOf(normalizedSiteName);
+        if (idx === -1) return 'none';
+
+        const endIdx = idx + normalizedSiteName.length;
+
+        // Отбрасываем разделители и пробелы по краям того, что осталось
+        // до и после siteName, чтобы понять, стоит ли он с краю
+        const separators = /[\s\-—–|:•·]+/;
+        const head = normalizedTitle.slice(0, idx).replace(new RegExp('^' + separators.source + '|' + separators.source + '$', 'g'), '').trim();
+        const tail = normalizedTitle.slice(endIdx).replace(new RegExp('^' + separators.source + '|' + separators.source + '$', 'g'), '').trim();
+
+        if (tail === '' && head !== '') return 'end';
+        if (head === '' && tail !== '') return 'start';
+        if (head === '' && tail === '') return 'start'; // заголовок == siteName
+        return 'middle';
     }
 
     // Функция для добавления siteName к заголовку, если его там нет
@@ -792,37 +818,36 @@
                 }
             }
 
-            // Показываем диалог выбора title только если есть варианты
-            stage = 'диалог выбора заголовка';
+            // Выбираем title только если есть несколько вариантов
+            stage = 'выбор заголовка';
             if (titleOptions.length > 1) {
-                // Проверяем, есть ли сохраненное предпочтение для заголовка
+                let titleResolved = false;
+
+                // 1. Сохраненное предпочтение для заголовка имеет приоритет
                 if (preferences && preferences.titlePreference) {
-                    // Ищем опцию с соответствующим типом
                     const preferredOption = titleOptions.find(opt => opt.type === preferences.titlePreference);
                     if (preferredOption) {
                         selectedTitle = preferredOption.value;
                         selectedTitleType = preferredOption.type;
-                    } else {
-                        // Предпочтение есть, но соответствующий заголовок недоступен - показываем диалог
-                        const result = await showChoiceDialog('Выберите заголовок', titleOptions, 'titleChoice', true);
-
-                        if (!result) {
-                            showToast('Копирование отменено', 'error');
-                            return;
-                        }
-
-                        selectedTitle = result.value;
-                        // Находим тип выбранного заголовка
-                        const selectedOption = titleOptions.find(opt => opt.value === result.value);
-                        selectedTitleType = selectedOption ? selectedOption.type : 'document.title';
-
-                        // Сохраняем предпочтение, если пользователь отметил чекбокс
-                        if (result.remember && domain) {
-                            saveTitlePreference(domain, selectedTitleType);
-                        }
+                        titleResolved = true;
                     }
-                } else {
-                    // Нет сохраненного предпочтения - показываем диалог
+                }
+
+                // 2. Автовыбор по позиции бренда: если siteName известен и ровно один
+                //    вариант содержит его в конце — выбираем его без диалога
+                if (!titleResolved && metadata.siteName) {
+                    const endVariants = titleOptions.filter(
+                        opt => getSiteNamePosition(opt.value, metadata.siteName) === 'end'
+                    );
+                    if (endVariants.length === 1) {
+                        selectedTitle = endVariants[0].value;
+                        selectedTitleType = endVariants[0].type;
+                        titleResolved = true;
+                    }
+                }
+
+                // 3. В остальных случаях показываем диалог выбора
+                if (!titleResolved) {
                     const result = await showChoiceDialog('Выберите заголовок', titleOptions, 'titleChoice', true);
 
                     if (!result) {
