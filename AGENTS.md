@@ -1,6 +1,10 @@
 # Создание нового userscript
 * Имя файла должно заканчиваться на .user.js
 * Заполняй @downloadURL как https://raw.githubusercontent.com/Self-Perfection/personal_userscripts/refs/heads/main/ + путь_к_файлу_в_репозитории
+* @namespace всегда `https://github.com/Self-Perfection`, @author всегда `Self-Perfection`
+  * Пара @name + @namespace — идентификатор скрипта в Tampermonkey. Дефолтный `http://tampermonkey.net/` из шаблона использовать **нельзя**: с ним чужой скрипт с совпадающим @name может быть принят за обновление нашего
+  * Namespace указывает на профиль, а не на репозиторий: переживает переименование и переезд скрипта
+  * Менять @namespace у уже выпущенного скрипта нельзя — это смена идентификатора, менеджер перестанет узнавать установленную копию
 
 # Версионирование userscript
 

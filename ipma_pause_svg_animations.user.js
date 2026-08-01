@@ -1,13 +1,14 @@
 // ==UserScript==
 // @name         IPMA Pause SVG Animations
-// @namespace    http://tampermonkey.net/
-// @version      1.2
+// @namespace    https://github.com/Self-Perfection
+// @version      1.3
 // @description  Pause animated SVG images on IPMA website to reduce CPU usage
-// @author       You
+// @author       Self-Perfection
 // @icon         https://www.ipma.pt/opencms/bin/icons/favicon.ico
 // @match        https://www.ipma.pt/*
 // @grant        none
 // @downloadURL  https://raw.githubusercontent.com/Self-Perfection/personal_userscripts/refs/heads/main/ipma_pause_svg_animations.user.js
+// @changelog    1.3 - @namespace заменён с дефолтного tampermonkey.net на профиль автора
 // @changelog    1.2 - DEPRECATED: правильное решение — правило uBlock Origin (см. ниже)
 // @changelog    1.1 - MutationObserver автоматически отключается через 10 секунд для снижения нагрузки
 // @changelog    1.0 - Initial version: pause *anim.svg animations after 0.5s

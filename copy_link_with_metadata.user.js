@@ -1,15 +1,16 @@
 // ==UserScript==
 // @name         Copy Page Link with Metadata
-// @namespace    http://tampermonkey.net/
-// @version      3.3
+// @namespace    https://github.com/Self-Perfection
+// @version      3.4
 // @description  Copy current page link with title, thumbnail and metadata
-// @author       You
+// @author       Self-Perfection
 // @match        *://*/*
 // @grant        GM_setClipboard
 // @grant        GM_registerMenuCommand
 // @grant        GM_setValue
 // @grant        GM_getValue
 // @downloadURL  https://raw.githubusercontent.com/Self-Perfection/personal_userscripts/refs/heads/main/copy_link_with_metadata.user.js
+// @changelog    3.4 - @namespace заменён с дефолтного tampermonkey.net на профиль автора
 // @changelog    3.3 - Если бренд (og:site_name) есть в заголовке, автоматически выбирается вариант с брендом в конце, без диалога
 // @changelog    3.2 - Настройки каждого домена хранятся в отдельном ключе domainPrefs_<домен> для удобного редактирования в Violentmonkey
 // @changelog    3.1 - Исправлено: диалог выбора не реагировал на клики на сайтах с агрессивным CSS (Wired.com и др.) — переход на <dialog> + Shadow DOM

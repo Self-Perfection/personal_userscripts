@@ -1,15 +1,16 @@
 // ==UserScript==
 // @name         Infopedia Cross-Dictionary Links
-// @namespace    http://tampermonkey.net/
-// @version      1.9
+// @namespace    https://github.com/Self-Perfection
+// @version      1.10
 // @description  Add cross-reference links between Português-Inglês, Português para Estrangeiros and Língua Portuguesa dictionaries
-// @author       You
+// @author       Self-Perfection
 // @icon         https://www.infopedia.pt/apple-touch-icon.png
 // @match        https://www.infopedia.pt/dicionarios/*
 // @grant        GM_setValue
 // @grant        GM_getValue
 // @grant        GM_registerMenuCommand
 // @downloadURL  https://raw.githubusercontent.com/Self-Perfection/personal_userscripts/refs/heads/main/infopedia_cross_dictionary_links.user.js
+// @changelog    1.10 - @namespace заменён с дефолтного tampermonkey.net на профиль автора
 // @changelog    1.9 - Уменьшен логотип на мобильных устройствах для предотвращения наложения кнопок
 // @changelog    1.8 - Пунктирная рамка перенесена на всю кнопку, иконка Português para Estrangeiros использует CSS filter вместо рамки
 // @changelog    1.7 - Добавлен третий словарь (Língua Portuguesa), множественные кросс-ссылки, пунктирная рамка для иконки Português para Estrangeiros

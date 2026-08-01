@@ -1,13 +1,14 @@
 // ==UserScript==
 // @name         Fogos.pt - Координаты как omaps.app ссылки
-// @namespace    http://tampermonkey.net/
-// @version      1.0
+// @namespace    https://github.com/Self-Perfection
+// @version      1.1
 // @description  Делает координаты на fogos.pt кликабельными ссылками на omaps.app и добавляет кнопку копирования
-// @author       You
+// @author       Self-Perfection
 // @icon         https://fogos.pt/favicon.ico
 // @match        https://fogos.pt/fogo/*
 // @grant        none
 // @downloadURL  https://raw.githubusercontent.com/Self-Perfection/personal_userscripts/refs/heads/main/fogospt_geolinks.user.js
+// @changelog    1.1 - @namespace заменён с дефолтного tampermonkey.net на профиль автора
 // ==/UserScript==
 
 (function() {
