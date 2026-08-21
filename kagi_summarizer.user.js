@@ -1,8 +1,9 @@
 // ==UserScript==
 // @name         Kagi Summarizer
 // @namespace    https://github.com/Self-Perfection
-// @version      1.4.1
+// @version      1.5
 // @description  Open current page summary in Kagi Summarizer
+// @changelog    1.5 - Добавлен @noframes: скрипт больше не запускается в iframe (открывались лишние вкладки)
 // @changelog    1.4 - Иконка
 // @changelog    1.3 - @namespace заменён с дефолтного tampermonkey.net на профиль автора
 // @changelog    1.2 - Добавлен fallback через window.open при неработающем GM_openInTab (Android Firefox)
