@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Kagi Summarizer
 // @namespace    https://github.com/Self-Perfection
-// @version      1.4
+// @version      1.4.1
 // @description  Open current page summary in Kagi Summarizer
 // @changelog    1.4 - Иконка
 // @changelog    1.3 - @namespace заменён с дефолтного tampermonkey.net на профиль автора
@@ -10,6 +10,7 @@
 // @author       Self-Perfection
 // @icon         https://kagi.com/favicon-summarizer-32x32.png
 // @match        *://*/*
+// @noframes
 // @grant        GM_registerMenuCommand
 // @grant        GM_openInTab
 // @downloadURL  https://raw.githubusercontent.com/Self-Perfection/personal_userscripts/refs/heads/main/kagi_summarizer.user.js
