@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Substack Profile to Subdomain Redirect
 // @namespace    https://github.com/Self-Perfection
-// @version      1.0.2
+// @version      1.1
 // @description  Redirect from substack.com/@username to username.substack.com
 // @author       Self-Perfection
 // @match        https://substack.com/@*
@@ -9,6 +9,7 @@
 // @grant        none
 // @run-at       document-start
 // @downloadURL  https://raw.githubusercontent.com/Self-Perfection/personal_userscripts/refs/heads/main/substack_profile_redirector.user.js
+// @changelog    1.1 - Первая версия: редирект substack.com/@username на username.substack.com
 // ==/UserScript==
 
 (function() {
